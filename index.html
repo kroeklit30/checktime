@@ -642,9 +642,10 @@
 
           <!-- Manage Subjects per Classroom -->
           <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-5 space-y-4">
-            <div class="flex items-center justify-between gap-2">
-              <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-book-open mr-2 text-sky-400"></i>เพิ่ม / ลบรายวิชาตามระดับชั้น</h4>
-              <select id="admin-subject-manage-class" class="class-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold"></select>
+            <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-book-open mr-2 text-sky-400"></i>เพิ่ม / ลบรายวิชาตามระดับชั้น</h4>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">เลือกระดับชั้น</label>
+              <select id="admin-subject-manage-class" class="class-select w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white font-semibold focus:border-sky-500 focus:outline-none"></select>
             </div>
             <div class="flex gap-2">
               <input type="text" id="admin-new-subject-input" placeholder="ชื่อวิชา เช่น วิทยาการคำนวณ" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none" />
@@ -663,7 +664,7 @@
               <i class="fa-solid fa-table-list text-sky-400"></i>
               <h4 class="text-sm font-bold text-white">ตารางสรุปรายวิชาทั้งหมดในปีการศึกษา <span id="admin-summary-year-label" class="text-indigo-400 tabular-nums"></span></h4>
             </div>
-            <span id="admin-total-subjects-badge" class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-semibold tabular-nums">0 วิชา</span>
+            <span id="admin-total-subjects-badge" class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-semibold tabular-nums">0 รายการ</span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm text-left">
@@ -671,8 +672,9 @@
                 <tr>
                   <th class="px-4 py-3 text-center w-16">ลำดับ</th>
                   <th class="px-4 py-3">ชื่อรายวิชา</th>
-                  <th class="px-4 py-3">ระดับชั้นที่เปิดสอน</th>
+                  <th class="px-4 py-3 text-center w-32">ระดับชั้น</th>
                   <th class="px-4 py-3 text-center w-36">นักเรียนลงทะเบียน</th>
+                  <th class="px-4 py-3 text-center w-24">จัดการ</th>
                 </tr>
               </thead>
               <tbody id="admin-subjects-summary-tbody" class="divide-y divide-slate-700/60 tabular-nums"></tbody>
@@ -732,18 +734,18 @@
           </div>
         </div>
 
-        <!-- Student List Table Grouped by Subject then Class -->
+        <!-- Student List Table Filtered by Class -->
         <div class="bg-slate-800 border border-slate-700/80 rounded-2xl overflow-hidden">
           <div class="p-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-3">
-              <span class="text-sm font-bold text-white"><i class="fa-solid fa-layer-group text-sky-400 mr-1.5"></i>รายชื่อนักเรียน (เรียงตามชื่อวิชา ➔ ระดับชั้น)</span>
-              <select id="admin-filter-class" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"></select>
+              <span class="text-sm font-bold text-white"><i class="fa-solid fa-users text-sky-400 mr-1.5"></i>รายชื่อนักเรียนตามระดับชั้น</span>
+              <select id="admin-filter-class" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-semibold"></select>
             </div>
             <button id="btn-admin-batch-delete" class="px-3.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-semibold transition">
               <i class="fa-solid fa-trash mr-1"></i> ลบที่เลือก
             </button>
           </div>
-          <div id="admin-students-grouped-container" class="p-4 space-y-5"></div>
+          <div id="admin-students-grouped-container" class="overflow-x-auto"></div>
         </div>
       </div>
 
@@ -797,7 +799,7 @@
             </div>
             <div>
               <h4 class="text-base font-bold text-white">ปิดยอดและล้างข้อมูลปีการศึกษาเก่า</h4>
-              <p class="text-xs text-slate-400 mt-1">เลือกเฉพาะปีการศึกษาที่น้อยกว่าปีปัจจุบัน ระบบจะลบข้อมูลรายชื่อ การเช็คชื่อ และออมทรัพย์ของปีนั้นออกจากฐานข้อมูลถาวร</p>
+              <p class="text-xs text-slate-400 mt-1">เลือกเฉพาะปีการศึกษาที่น้อยกว่าปีปัจจุบัน ระบบจะลบเฉพาะข้อมูลการเช็คชื่อมาเรียนและยอดออมทรัพย์ของปีนั้นออกจากฐานข้อมูลถาวร (รายชื่อนักเรียน ห้องเรียน และรายวิชาจะยังคงอยู่ครบถ้วน)</p>
             </div>
           </div>
 
@@ -1044,8 +1046,6 @@
 
     // Global Constants
     const DEFAULT_CLASSES = ['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6', 'ม.1', 'ม.2', 'ม.3'];
-    const PRIMARY_SUBJECTS = ['ภาษาไทย', 'คณิตศาสตร์', 'วิทยาศาสตร์', 'สังคมศึกษา', 'ภาษาอังกฤษ', 'สุขศึกษา', 'ศิลปะ'];
-    const SECONDARY_SUBJECTS = [...PRIMARY_SUBJECTS, 'วิทยาการคำนวณ'];
     const ADMIN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
     const THAI_MONTHS = {
       '01': 'มกราคม', '02': 'กุมภาพันธ์', '03': 'มีนาคม', '04': 'เมษายน',
@@ -1056,7 +1056,7 @@
     function buildDefaultSubjectsMap(classList) {
       const map = {};
       classList.forEach(c => {
-        map[c] = c.startsWith('ม.') ? [...SECONDARY_SUBJECTS] : [...PRIMARY_SUBJECTS];
+        map[c] = [];
       });
       return map;
     }
@@ -1181,11 +1181,11 @@
 
     // Helpers
     function getSubjectsForClass(cls) {
-      if (!cls) return [...PRIMARY_SUBJECTS];
+      if (!cls) return [];
       if (Array.isArray(state.subjectsByLevel[cls])) {
         return state.subjectsByLevel[cls];
       }
-      return cls.startsWith('ม.') ? [...SECONDARY_SUBJECTS] : [...PRIMARY_SUBJECTS];
+      return [];
     }
 
     function detectGender(name) {
@@ -1210,7 +1210,7 @@
         name: (s.name || '').trim(),
         gender: s.gender || detectGender(s.name),
         class: cls,
-        subjects: Array.isArray(s.subjects) && s.subjects.length > 0 ? s.subjects : [...getSubjectsForClass(cls)]
+        subjects: Array.isArray(s.subjects) ? s.subjects : []
       };
     }
 
@@ -1395,6 +1395,10 @@
       const cls = clsEl.value || state.classes[0];
       const subjects = getSubjectsForClass(cls);
       const prevSub = state.filters[subjectSelectId] || subEl.value;
+      if (subjects.length === 0) {
+        subEl.innerHTML = `<option value="">-- ยังไม่มีรายวิชาในชั้นนี้ --</option>`;
+        return;
+      }
       subEl.innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
       if (prevSub && subjects.includes(prevSub)) {
         subEl.value = prevSub;
@@ -2134,12 +2138,16 @@
       const manageCls = document.getElementById('admin-subject-manage-class')?.value || state.classes[0];
       const subjects = getSubjectsForClass(manageCls);
       const subChips = document.getElementById('admin-subject-chips');
-      subChips.innerHTML = subjects.map(s => `
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-xs font-semibold text-sky-300">
-          <span>${s}</span>
-          <button type="button" data-del-sub="${s}" class="text-sky-400 hover:text-rose-400"><i class="fa-solid fa-xmark"></i></button>
-        </span>
-      `).join('');
+      if (subjects.length === 0) {
+        subChips.innerHTML = `<span class="text-xs text-slate-400">ยังไม่มีรายวิชาในระดับชั้น ${manageCls}</span>`;
+      } else {
+        subChips.innerHTML = subjects.map(s => `
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-xs font-semibold text-sky-300">
+            <span>${s}</span>
+            <button type="button" data-del-sub="${s}" class="text-sky-400 hover:text-rose-400"><i class="fa-solid fa-xmark"></i></button>
+          </span>
+        `).join('');
+      }
 
       subChips.querySelectorAll('[data-del-sub]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -2150,45 +2158,73 @@
         });
       });
 
-      // Summary Table of All Subjects in Academic Year
+      // Summary Table of All Subjects in Academic Year (1 row per Subject + Class)
       document.getElementById('admin-summary-year-label').textContent = state.currentYear;
-      const subjectMap = {};
+      const subjectClassRows = [];
+      const seenPairs = new Set();
+
       state.classes.forEach(cls => {
         getSubjectsForClass(cls).forEach(sub => {
-          if (!subjectMap[sub]) subjectMap[sub] = new Set();
-          subjectMap[sub].add(cls);
-        });
-      });
-      state.students.forEach(stu => {
-        (stu.subjects || []).forEach(sub => {
-          if (!subjectMap[sub]) subjectMap[sub] = new Set();
-          subjectMap[sub].add(stu.class);
+          const pairKey = `${sub}||${cls}`;
+          if (!seenPairs.has(pairKey)) {
+            seenPairs.add(pairKey);
+            subjectClassRows.push({ subject: sub, className: cls });
+          }
         });
       });
 
-      const sortedSubjects = Object.keys(subjectMap).sort((a, b) => a.localeCompare(b, 'th'));
-      document.getElementById('admin-total-subjects-badge').textContent = `${sortedSubjects.length} วิชา`;
+      subjectClassRows.sort((a, b) => {
+        const subCmp = a.subject.localeCompare(b.subject, 'th');
+        if (subCmp !== 0) return subCmp;
+        const idxA = state.classes.indexOf(a.className);
+        const idxB = state.classes.indexOf(b.className);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        return a.className.localeCompare(b.className, 'th');
+      });
+
+      document.getElementById('admin-total-subjects-badge').textContent = `${subjectClassRows.length} รายการ`;
 
       const summaryTbody = document.getElementById('admin-subjects-summary-tbody');
-      if (sortedSubjects.length === 0) {
-        summaryTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">ยังไม่มีรายวิชาในปีการศึกษานี้</td></tr>`;
+      if (subjectClassRows.length === 0) {
+        summaryTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">ยังไม่มีรายวิชาในปีการศึกษานี้ (สามารถเพิ่มรายวิชาได้ที่กล่องด้านบน)</td></tr>`;
       } else {
-        summaryTbody.innerHTML = sortedSubjects.map((sub, idx) => {
-          const classesOffering = Array.from(subjectMap[sub]);
-          const enrolledCount = state.students.filter(s => (s.subjects || []).includes(sub)).length;
+        summaryTbody.innerHTML = subjectClassRows.map((item, idx) => {
+          const enrolledCount = state.students.filter(
+            s => s.class === item.className && Array.isArray(s.subjects) && s.subjects.includes(item.subject)
+          ).length;
           return `
             <tr class="hover:bg-slate-700/30">
               <td class="px-4 py-3 text-center font-bold text-slate-300">${idx + 1}</td>
-              <td class="px-4 py-3 font-semibold text-white">${sub}</td>
-              <td class="px-4 py-3">
-                <div class="flex flex-wrap gap-1.5">
-                  ${classesOffering.map(c => `<span class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-indigo-300">${c}</span>`).join('')}
-                </div>
+              <td class="px-4 py-3 font-semibold text-white">${item.subject}</td>
+              <td class="px-4 py-3 text-center">
+                <span class="px-2.5 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-indigo-300">${item.className}</span>
               </td>
               <td class="px-4 py-3 text-center font-bold text-emerald-400">${enrolledCount} คน</td>
+              <td class="px-4 py-3 text-center">
+                <button type="button" data-del-row-sub="${item.subject}" data-del-row-cls="${item.className}" class="btn-del-subject-row px-2.5 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-semibold transition" title="ลบวิชานี้">
+                  <i class="fa-solid fa-trash"></i> ลบ
+                </button>
+              </td>
             </tr>
           `;
         }).join('');
+
+        summaryTbody.querySelectorAll('.btn-del-subject-row').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const targetSub = btn.dataset.delRowSub;
+            const targetCls = btn.dataset.delRowCls;
+            state.subjectsByLevel[targetCls] = getSubjectsForClass(targetCls).filter(s => s !== targetSub);
+            state.students = state.students.map(stu => {
+              if (stu.class === targetCls && Array.isArray(stu.subjects)) {
+                return { ...stu, subjects: stu.subjects.filter(s => s !== targetSub) };
+              }
+              return stu;
+            });
+            await saveMetadataToCloud();
+            await saveStudentsToCloud();
+            persistSessionAndReload(`ลบวิชา ${targetSub} (${targetCls}) เรียบร้อยแล้ว`);
+          });
+        });
       }
     }
 
@@ -2196,6 +2232,10 @@
       const cls = document.getElementById('admin-student-class')?.value || state.classes[0];
       const subjects = getSubjectsForClass(cls);
       const container = document.getElementById('admin-student-subjects');
+      if (subjects.length === 0) {
+        container.innerHTML = `<span class="text-xs text-amber-300">ยังไม่มีรายวิชาในระดับชั้น ${cls} (กรุณาเพิ่มรายวิชาในแท็บ "จัดการห้องเรียนและวิชา" ก่อน)</span>`;
+        return;
+      }
       container.innerHTML = subjects.map(s => `
         <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 cursor-pointer hover:border-indigo-500">
           <input type="checkbox" value="${s}" checked class="stu-sub-cb rounded text-indigo-500 focus:ring-0" />
@@ -2208,96 +2248,69 @@
       renderSingleStudentSubjectCheckboxes();
 
       const filterCls = document.getElementById('admin-filter-class')?.value || 'ALL';
-      const filteredStudents = filterCls === 'ALL'
-        ? state.students
-        : state.students.filter(s => s.class === filterCls);
+      const filteredStudents = (filterCls === 'ALL'
+        ? [...state.students]
+        : state.students.filter(s => s.class === filterCls)
+      ).sort((a, b) => {
+        const idxA = state.classes.indexOf(a.class);
+        const idxB = state.classes.indexOf(b.class);
+        if (idxA !== idxB) {
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          return a.class.localeCompare(b.class, 'th');
+        }
+        return a.no - b.no;
+      });
 
       const container = document.getElementById('admin-students-grouped-container');
       if (filteredStudents.length === 0) {
-        container.innerHTML = `<div class="py-10 text-center text-slate-400 text-sm">ยังไม่มีรายชื่อนักเรียนในหมวดที่เลือก</div>`;
+        container.innerHTML = `<div class="py-10 text-center text-slate-400 text-sm">ยังไม่มีรายชื่อนักเรียนในระดับชั้นที่เลือก</div>`;
         return;
       }
 
-      // Group by Subject -> Class
-      const groupedBySubject = {};
-      filteredStudents.forEach(stu => {
-        const subs = Array.isArray(stu.subjects) && stu.subjects.length > 0 ? stu.subjects : ['ไม่ระบุวิชา'];
-        subs.forEach(sub => {
-          if (!groupedBySubject[sub]) groupedBySubject[sub] = {};
-          if (!groupedBySubject[sub][stu.class]) groupedBySubject[sub][stu.class] = [];
-          groupedBySubject[sub][stu.class].push(stu);
-        });
-      });
+      container.innerHTML = `
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-900/90 text-slate-400 uppercase border-b border-slate-700">
+            <tr>
+              <th class="px-3 py-3 text-center w-10"><input type="checkbox" id="stu-select-all-visible" class="rounded" /></th>
+              <th class="px-3 py-3 text-center w-20">ระดับชั้น</th>
+              <th class="px-3 py-3 text-center w-14">เลขที่</th>
+              <th class="px-3 py-3">ชื่อ - นามสกุล</th>
+              <th class="px-3 py-3 text-center w-20">เพศ</th>
+              <th class="px-3 py-3">รายวิชาที่เรียน</th>
+              <th class="px-3 py-3 text-right w-24">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/60 tabular-nums">
+            ${filteredStudents.map(stu => {
+              const subs = Array.isArray(stu.subjects) ? stu.subjects : [];
+              return `
+                <tr class="hover:bg-slate-700/30">
+                  <td class="px-3 py-2.5 text-center"><input type="checkbox" value="${stu.id}" class="stu-del-cb rounded" /></td>
+                  <td class="px-3 py-2.5 text-center"><span class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 font-bold text-indigo-300">${stu.class}</span></td>
+                  <td class="px-3 py-2.5 text-center font-bold text-slate-300">${stu.no}</td>
+                  <td class="px-3 py-2.5 font-medium text-white whitespace-nowrap">${stu.name}</td>
+                  <td class="px-3 py-2.5 text-center">${renderGenderBadge(stu.gender)}</td>
+                  <td class="px-3 py-2.5">
+                    <div class="flex flex-wrap gap-1">
+                      ${subs.length > 0
+                        ? subs.map(s => `<span class="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-300">${s}</span>`).join('')
+                        : `<span class="text-slate-500">- ยังไม่ระบุวิชา -</span>`}
+                    </div>
+                  </td>
+                  <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+                    <button type="button" data-edit-id="${stu.id}" class="btn-edit-stu px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 hover:text-white transition"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" data-del-id="${stu.id}" class="btn-del-single-stu px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-rose-600 text-slate-200 hover:text-white transition"><i class="fa-solid fa-trash"></i></button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
 
-      const sortedSubjects = Object.keys(groupedBySubject).sort((a, b) => a.localeCompare(b, 'th'));
-
-      container.innerHTML = sortedSubjects.map(sub => {
-        const classesInSub = Object.keys(groupedBySubject[sub]).sort((a, b) => {
-          const idxA = state.classes.indexOf(a);
-          const idxB = state.classes.indexOf(b);
-          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-          return a.localeCompare(b, 'th');
-        });
-
-        const classBlocksHtml = classesInSub.map(cls => {
-          const list = groupedBySubject[sub][cls].sort((a, b) => a.no - b.no);
-          return `
-            <div class="border border-slate-700/80 rounded-xl overflow-hidden">
-              <div class="bg-slate-900/70 px-3.5 py-2 flex items-center justify-between text-xs">
-                <span class="font-bold text-indigo-300"><i class="fa-solid fa-door-open mr-1.5"></i>ระดับชั้น ${cls} (${list.length} คน)</span>
-                <label class="inline-flex items-center gap-1.5 text-slate-400 cursor-pointer">
-                  <input type="checkbox" class="group-select-all rounded" />
-                  <span>เลือกทั้งห้อง</span>
-                </label>
-              </div>
-              <div class="overflow-x-auto">
-                <table class="w-full text-xs text-left">
-                  <thead class="bg-slate-900/40 text-slate-400 border-b border-slate-700/60">
-                    <tr>
-                      <th class="px-3 py-2 text-center w-10">เลือก</th>
-                      <th class="px-3 py-2 text-center w-14">เลขที่</th>
-                      <th class="px-3 py-2">ชื่อ - นามสกุล</th>
-                      <th class="px-3 py-2 text-center">เพศ</th>
-                      <th class="px-3 py-2 text-right">จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-700/50 tabular-nums">
-                    ${list.map(stu => `
-                      <tr class="hover:bg-slate-700/30">
-                        <td class="px-3 py-2 text-center"><input type="checkbox" value="${stu.id}" class="stu-del-cb rounded" /></td>
-                        <td class="px-3 py-2 text-center font-bold text-slate-300">${stu.no}</td>
-                        <td class="px-3 py-2 font-medium text-white">${stu.name}</td>
-                        <td class="px-3 py-2 text-center">${renderGenderBadge(stu.gender)}</td>
-                        <td class="px-3 py-2 text-right space-x-1.5">
-                          <button type="button" data-edit-id="${stu.id}" class="btn-edit-stu px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 hover:text-white transition"><i class="fa-solid fa-pen"></i></button>
-                          <button type="button" data-del-id="${stu.id}" class="btn-del-single-stu px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-rose-600 text-slate-200 hover:text-white transition"><i class="fa-solid fa-trash"></i></button>
-                        </td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          `;
-        }).join('');
-
-        return `
-          <div class="bg-slate-900/40 border border-slate-700 rounded-2xl p-4 space-y-3">
-            <div class="flex items-center justify-between">
-              <h5 class="text-sm font-bold text-sky-400"><i class="fa-solid fa-book mr-2"></i>วิชา: ${sub}</h5>
-              <span class="text-xs text-slate-400">${classesInSub.length} ห้องเรียน</span>
-            </div>
-            <div class="space-y-3">${classBlocksHtml}</div>
-          </div>
-        `;
-      }).join('');
-
-      // Group select all checkboxes
-      container.querySelectorAll('.group-select-all').forEach(cb => {
-        cb.addEventListener('change', () => {
-          const table = cb.closest('div.border').querySelector('table');
-          table.querySelectorAll('.stu-del-cb').forEach(item => item.checked = cb.checked);
-        });
+      // Select all visible students checkbox
+      document.getElementById('stu-select-all-visible')?.addEventListener('change', (e) => {
+        container.querySelectorAll('.stu-del-cb').forEach(cb => cb.checked = e.target.checked);
       });
 
       // Single Delete
@@ -2328,6 +2341,10 @@
     function renderEditStudentSubjects(cls, selectedSubjects) {
       const subjects = getSubjectsForClass(cls);
       const container = document.getElementById('edit-stu-subjects');
+      if (subjects.length === 0) {
+        container.innerHTML = `<span class="text-xs text-slate-400">ยังไม่มีรายวิชาในระดับชั้น ${cls}</span>`;
+        return;
+      }
       container.innerHTML = subjects.map(s => `
         <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 cursor-pointer">
           <input type="checkbox" value="${s}" ${selectedSubjects.includes(s) ? 'checked' : ''} class="edit-stu-sub-cb rounded text-indigo-500" />
@@ -2816,7 +2833,7 @@
         if (!val) return showToast('กรุณากรอกชื่อห้องเรียน', 'error');
         if (state.classes.includes(val)) return showToast('มีห้องเรียนนี้อยู่แล้ว', 'error');
         state.classes.push(val);
-        state.subjectsByLevel[val] = val.startsWith('ม.') ? [...SECONDARY_SUBJECTS] : [...PRIMARY_SUBJECTS];
+        state.subjectsByLevel[val] = [];
         await saveMetadataToCloud();
         persistSessionAndReload(`เพิ่มห้องเรียน ${val} เรียบร้อยแล้ว`);
       });
@@ -2919,7 +2936,12 @@
       const renderBulkSubjects = () => {
         const cls = document.getElementById('bulk-student-class').value || state.classes[0];
         const subjects = getSubjectsForClass(cls);
-        document.getElementById('bulk-student-subjects').innerHTML = subjects.map(s => `
+        const container = document.getElementById('bulk-student-subjects');
+        if (subjects.length === 0) {
+          container.innerHTML = `<span class="text-xs text-amber-300">ยังไม่มีรายวิชาในระดับชั้น ${cls} (กรุณาเพิ่มรายวิชาในแท็บ "จัดการห้องเรียนและวิชา" ก่อน)</span>`;
+          return;
+        }
+        container.innerHTML = subjects.map(s => `
           <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 cursor-pointer">
             <input type="checkbox" value="${s}" checked class="bulk-sub-cb rounded text-indigo-500" />
             <span>${s}</span>
@@ -3083,18 +3105,16 @@
         const targetYear = document.getElementById('purge-old-year-select').value;
         if (!targetYear) return;
         try {
-          localStorage.removeItem(`kroek_${targetYear}_students`);
           localStorage.removeItem(`kroek_${targetYear}_attendance`);
           localStorage.removeItem(`kroek_${targetYear}_savings`);
         } catch (e) {}
         try {
-          await deleteDoc(doc(db, 'years', `${targetYear}_students`));
           await deleteDoc(doc(db, 'years', `${targetYear}_attendance`));
           await deleteDoc(doc(db, 'years', `${targetYear}_savings`));
         } catch (e) {
           handleFirestoreError(e);
         }
-        persistSessionAndReload(`ล้างข้อมูลปีการศึกษา ${targetYear} เรียบร้อยแล้ว`);
+        persistSessionAndReload(`ล้างข้อมูลการมาเรียนและออมทรัพย์ ปีการศึกษา ${targetYear} เรียบร้อยแล้ว (คงรายชื่อและวิชาไว้ครบถ้วน)`);
       });
 
       // 5-Minute Admin Session Countdown Timer
