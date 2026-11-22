@@ -338,9 +338,9 @@
           <select id="sub-summary-subject" class="subject-select w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white"></select>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-400 mb-1.5">ช่วงเวลา</label>
+          <label class="block text-xs font-semibold text-slate-400 mb-1.5">ช่วงเวลา / เดือน</label>
           <select id="sub-summary-month" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white">
-            <option value="ALL">ทั้งหมด (ทั้งปีการศึกษา)</option>
+            <option value="ALL" selected>ตลอดปีการศึกษา</option>
             <option value="05">พฤษภาคม</option>
             <option value="06">มิถุนายน</option>
             <option value="07">กรกฎาคม</option>
@@ -390,7 +390,7 @@
         </button>
       </div>
 
-      <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div>
           <label class="block text-xs font-semibold text-slate-400 mb-1.5">ระดับชั้น</label>
           <select id="ind-summary-class" class="class-select w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white"></select>
@@ -414,6 +414,13 @@
             <option value="02">กุมภาพันธ์</option>
             <option value="03">มีนาคม</option>
             <option value="04">เมษายน</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1.5">มุมมองวันที่ในตาราง</label>
+          <select id="ind-summary-mode" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white">
+            <option value="all" selected>แสดงทุกวันที่ในเดือน (1-30/31)</option>
+            <option value="active">แสดงเฉพาะวันที่เช็คชื่อ</option>
           </select>
         </div>
       </div>
@@ -445,6 +452,14 @@
 
       <!-- Matrix Table -->
       <div class="bg-slate-800 border border-slate-700/80 rounded-2xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+          <span id="ind-matrix-month-title" class="font-semibold text-slate-200">ตารางแสดงวันที่มาเรียน</span>
+          <div class="flex items-center gap-4">
+            <span><strong class="text-emerald-400">✓</strong> = มาเรียน</span>
+            <span><strong class="text-rose-400">✗</strong> = ขาดเรียน</span>
+            <span><strong class="text-slate-500">-</strong> = ไม่มีเรียน</span>
+          </div>
+        </div>
         <div class="overflow-x-auto">
           <table id="ind-matrix-table" class="w-full text-xs text-left border-collapse">
             <thead id="ind-matrix-thead" class="bg-slate-900 text-slate-300 border-b border-slate-700"></thead>
@@ -1148,7 +1163,7 @@
         'dash-filter-class', 'dash-filter-subject',
         'check-select-class', 'check-select-subject', 'check-input-date',
         'sub-summary-class', 'sub-summary-subject', 'sub-summary-month',
-        'ind-summary-class', 'ind-summary-subject', 'ind-summary-month',
+        'ind-summary-class', 'ind-summary-subject', 'ind-summary-month', 'ind-summary-mode',
         'savings-daily-class', 'savings-daily-date',
         'savings-monthly-class', 'savings-monthly-month', 'savings-monthly-mode',
         'admin-student-class', 'admin-subject-manage-class', 'admin-filter-class'
@@ -1707,18 +1722,36 @@
     }
 
     // ==================== VIEW 4: INDIVIDUAL MONTHLY MATRIX ====================
-    function getIndividualMatrixData(cls, sub, month) {
+    function getDaysInMonthList(buddhistYear, monthStr) {
+      let gregYear = (parseInt(buddhistYear, 10) || 2569) - 543;
+      const m = parseInt(monthStr, 10) || 11;
+      if (m >= 1 && m <= 4) gregYear += 1;
+      const daysCount = new Date(gregYear, m, 0).getDate();
+      const list = [];
+      for (let d = 1; d <= daysCount; d++) {
+        list.push(String(d).padStart(2, '0'));
+      }
+      return list;
+    }
+
+    function getIndividualMatrixData(cls, sub, month, mode = 'all') {
       const students = state.students
         .filter(s => s.class === cls && (!s.subjects || s.subjects.includes(sub)))
         .sort((a, b) => a.no - b.no);
 
-      const activeDates = [];
-      Object.keys(state.attendance).sort().forEach(key => {
-        const [kCls, kSub, kDate] = key.split('|');
-        if (kCls === cls && kSub === sub && kDate.split('-')[1] === month) {
-          activeDates.push(kDate);
-        }
-      });
+      let dayColumns = [];
+      if (mode === 'active') {
+        const activeSet = new Set();
+        Object.keys(state.attendance).forEach(key => {
+          const [kCls, kSub, kDate] = key.split('|');
+          if (kCls === cls && kSub === sub && kDate && kDate.split('-')[1] === month) {
+            activeSet.add(kDate.split('-')[2]);
+          }
+        });
+        dayColumns = Array.from(activeSet).sort();
+      } else {
+        dayColumns = getDaysInMonthList(state.currentYear, month);
+      }
 
       let totalPresent = 0;
       let totalAbsent = 0;
@@ -1726,8 +1759,16 @@
       const matrixRows = students.map(stu => {
         let p = 0;
         let a = 0;
-        const cells = activeDates.map(dt => {
-          const st = state.attendance[`${cls}|${sub}|${dt}`]?.[stu.id] || '';
+        const cells = dayColumns.map(dd => {
+          let st = '';
+          Object.entries(state.attendance).forEach(([key, dayMap]) => {
+            const [kCls, kSub, kDate] = key.split('|');
+            if (kCls === cls && kSub === sub && kDate && kDate.split('-')[1] === month && kDate.split('-')[2] === dd) {
+              if (dayMap && dayMap[stu.id]) {
+                st = dayMap[stu.id];
+              }
+            }
+          });
           if (st === 'present') { p++; totalPresent++; }
           else if (st === 'absent') { a++; totalAbsent++; }
           return st;
@@ -1735,51 +1776,72 @@
         return { ...stu, cells, present: p, absent: a };
       });
 
-      return { activeDates, matrixRows, totalPresent, totalAbsent };
+      return { activeDates: dayColumns, matrixRows, totalPresent, totalAbsent };
     }
 
     function renderIndividualSummaryView() {
       const cls = document.getElementById('ind-summary-class')?.value || state.classes[0];
       const sub = document.getElementById('ind-summary-subject')?.value || getSubjectsForClass(cls)[0];
       const month = document.getElementById('ind-summary-month')?.value || '11';
+      const mode = document.getElementById('ind-summary-mode')?.value || 'all';
+      const monthName = THAI_MONTHS[month] || '';
+      const monthNum = parseInt(month, 10);
 
-      const { activeDates, matrixRows, totalPresent, totalAbsent } = getIndividualMatrixData(cls, sub, month);
+      const { activeDates, matrixRows, totalPresent, totalAbsent } = getIndividualMatrixData(cls, sub, month, mode);
 
-      document.getElementById('ind-stat-subject').textContent = `${sub} (${cls})`;
+      document.getElementById('ind-stat-subject').textContent = `${sub || '-'} (${cls})`;
       document.getElementById('ind-stat-present').textContent = `${totalPresent} ครั้ง`;
       document.getElementById('ind-stat-absent').textContent = `${totalAbsent} ครั้ง`;
+      const titleEl = document.getElementById('ind-matrix-month-title');
+      if (titleEl) {
+        titleEl.textContent = `ตารางแสดงวันที่มาเรียน ประจำเดือน${monthName} ปีการศึกษา ${state.currentYear}`;
+      }
 
       const thead = document.getElementById('ind-matrix-thead');
       const tbody = document.getElementById('ind-matrix-tbody');
 
-      const dateHeaders = activeDates.map(dt => `<th class="px-2.5 py-3 text-center min-w-[44px]">${parseInt(dt.split('-')[2], 10)}</th>`).join('');
+      const dateHeaders = activeDates.map(dd => `
+        <th class="px-2 py-2 text-center min-w-[44px] border-l border-slate-800">
+          <div class="font-bold text-white">${parseInt(dd, 10)}/${monthNum}</div>
+        </th>
+      `).join('');
       thead.innerHTML = `
+        <tr class="bg-slate-950/60 border-b border-slate-800 text-[11px] text-indigo-300">
+          <th class="px-3 py-1.5 sticky left-0 bg-slate-900 z-10"></th>
+          <th class="px-3 py-1.5 sticky left-12 bg-slate-900 z-10"></th>
+          <th colspan="${Math.max(activeDates.length, 1)}" class="px-2 py-1.5 text-center border-l border-slate-800">
+            วันที่เรียน (วันที่/เดือน${monthName})
+          </th>
+          <th colspan="2" class="px-2 py-1.5 text-center border-l border-slate-700 text-slate-300">สรุป (ครั้ง)</th>
+        </tr>
         <tr>
-          <th class="px-3 py-3 text-center sticky left-0 bg-slate-900 z-10 w-12">เลขที่</th>
-          <th class="px-3 py-3 sticky left-12 bg-slate-900 z-10 min-w-[160px]">ชื่อ - นามสกุล</th>
-          ${dateHeaders}
-          <th class="px-3 py-3 text-center text-emerald-400">มา</th>
-          <th class="px-3 py-3 text-center text-rose-400">ขาด</th>
+          <th class="px-3 py-2.5 text-center sticky left-0 bg-slate-900 z-10 w-12">เลขที่</th>
+          <th class="px-3 py-2.5 sticky left-12 bg-slate-900 z-10 min-w-[160px]">ชื่อ - นามสกุล</th>
+          ${activeDates.length > 0 ? dateHeaders : '<th class="px-3 py-2.5 text-center text-slate-500 border-l border-slate-800">ยังไม่มีวันที่เช็คชื่อ</th>'}
+          <th class="px-3 py-2.5 text-center text-emerald-400 border-l border-slate-700">มา</th>
+          <th class="px-3 py-2.5 text-center text-rose-400">ขาด</th>
         </tr>
       `;
 
       if (matrixRows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${activeDates.length + 4}" class="px-4 py-8 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในวิชานี้</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${Math.max(activeDates.length, 1) + 4}" class="px-4 py-8 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในวิชานี้</td></tr>`;
         return;
       }
 
       tbody.innerHTML = matrixRows.map(r => {
-        const dayCells = r.cells.map(st => {
-          if (st === 'present') return `<td class="px-2.5 py-2.5 text-center text-emerald-400 font-bold">✓</td>`;
-          if (st === 'absent') return `<td class="px-2.5 py-2.5 text-center text-rose-400 font-bold">✗</td>`;
-          return `<td class="px-2.5 py-2.5 text-center text-slate-600">-</td>`;
-        }).join('');
+        const dayCells = activeDates.length > 0
+          ? r.cells.map(st => {
+              if (st === 'present') return `<td class="px-2 py-2.5 text-center text-emerald-400 font-bold border-l border-slate-700/40">✓</td>`;
+              if (st === 'absent') return `<td class="px-2 py-2.5 text-center text-rose-400 font-bold border-l border-slate-700/40">✗</td>`;
+              return `<td class="px-2 py-2.5 text-center text-slate-600 border-l border-slate-700/40">-</td>`;
+            }).join('')
+          : `<td class="px-2 py-2.5 text-center text-slate-600 border-l border-slate-700/40">-</td>`;
         return `
           <tr class="hover:bg-slate-700/30">
             <td class="px-3 py-2.5 text-center font-bold sticky left-0 bg-slate-800">${r.no}</td>
             <td class="px-3 py-2.5 font-medium text-white sticky left-12 bg-slate-800 whitespace-nowrap">${r.name}</td>
             ${dayCells}
-            <td class="px-3 py-2.5 text-center font-bold text-emerald-400">${r.present}</td>
+            <td class="px-3 py-2.5 text-center font-bold text-emerald-400 border-l border-slate-700">${r.present}</td>
             <td class="px-3 py-2.5 text-center font-bold text-rose-400">${r.absent}</td>
           </tr>
         `;
@@ -1944,7 +2006,8 @@
       const existingDay = state.savings[`${cls}|${dateVal}`] || {};
       students.forEach(s => {
         if (draftSavings[s.id] === undefined) {
-          draftSavings[s.id] = Number(existingDay[s.id] || 0);
+          const savedVal = existingDay[s.id];
+          draftSavings[s.id] = savedVal === 'absent' ? 'absent' : Number(savedVal || 0);
         }
       });
 
@@ -1955,7 +2018,17 @@
       }
 
       tbody.innerHTML = students.map(stu => {
-        const amt = Number(draftSavings[stu.id] || 0);
+        const rawVal = draftSavings[stu.id];
+        const isAbsent = rawVal === 'absent';
+        const amt = isAbsent ? 0 : Number(rawVal || 0);
+
+        let statusBadge = `<span class="px-3 py-1 rounded-full bg-slate-700 text-slate-400 text-xs">ไม่ฝาก</span>`;
+        if (isAbsent) {
+          statusBadge = `<span class="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold text-xs">ขาดเรียน</span>`;
+        } else if (amt > 0) {
+          statusBadge = `<span class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs">ฝาก ${amt.toLocaleString()} บาท</span>`;
+        }
+
         return `
           <tr class="hover:bg-slate-700/30">
             <td class="px-4 py-3 text-center font-bold text-slate-300">${stu.no}</td>
@@ -1964,14 +2037,17 @@
               <div class="mt-0.5">${renderGenderBadge(stu.gender)}</div>
             </td>
             <td class="px-4 py-3 text-center">
-              ${amt > 0
-                ? `<span class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs">ฝาก ${amt.toLocaleString()} บาท</span>`
-                : `<span class="px-3 py-1 rounded-full bg-slate-700 text-slate-400 text-xs">ไม่ฝาก</span>`}
+              ${statusBadge}
             </td>
             <td class="px-4 py-3 text-right">
-              <button type="button" data-stu-id="${stu.id}" data-stu-name="${stu.name}" class="btn-open-numpad px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
-                <i class="fa-solid fa-calculator mr-1"></i> ระบุยอดเงิน
-              </button>
+              <div class="inline-flex flex-wrap items-center justify-end gap-1.5">
+                <button type="button" data-stu-id="${stu.id}" data-stu-name="${stu.name}" class="btn-open-numpad px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+                  <i class="fa-solid fa-coins mr-1"></i> ระบุจำนวน
+                </button>
+                <button type="button" data-stu-id="${stu.id}" class="btn-mark-savings-absent px-3 py-2 rounded-xl text-xs font-semibold transition ${isAbsent ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30'}">
+                  <i class="fa-solid fa-user-xmark mr-1"></i> ขาด
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -1980,10 +2056,19 @@
       tbody.querySelectorAll('.btn-open-numpad').forEach(btn => {
         btn.addEventListener('click', () => {
           state.activeNumpadStudentId = btn.dataset.stuId;
-          state.numpadVal = String(draftSavings[state.activeNumpadStudentId] || 0);
+          const currentVal = draftSavings[state.activeNumpadStudentId];
+          state.numpadVal = currentVal === 'absent' ? '0' : String(currentVal || 0);
           document.getElementById('numpad-student-name').textContent = btn.dataset.stuName;
           document.getElementById('numpad-display').textContent = state.numpadVal;
           document.getElementById('modal-numpad').classList.remove('hidden');
+        });
+      });
+
+      tbody.querySelectorAll('.btn-mark-savings-absent').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.stuId;
+          draftSavings[id] = draftSavings[id] === 'absent' ? 0 : 'absent';
+          renderSavingsDaily();
         });
       });
     }
@@ -2014,17 +2099,20 @@
       const rows = students.map(stu => {
         let rowSum = 0;
         const cells = dayColumns.map(dd => {
-          let val = 0;
+          let cellVal = 0;
           Object.entries(state.savings).forEach(([key, dayMap]) => {
             const [kCls, kDate] = key.split('|');
             if (kCls === cls && kDate.split('-')[1] === month && kDate.split('-')[2] === dd) {
-              val = Number(dayMap[stu.id] || 0);
+              const raw = dayMap[stu.id];
+              cellVal = raw === 'absent' ? 'absent' : Number(raw || 0);
             }
           });
-          rowSum += val;
-          dayTotals[dd] += val;
-          grandTotal += val;
-          return val;
+          if (cellVal !== 'absent') {
+            rowSum += cellVal;
+            dayTotals[dd] += cellVal;
+            grandTotal += cellVal;
+          }
+          return cellVal;
         });
         return { ...stu, cells, rowSum };
       });
@@ -2061,7 +2149,11 @@
         <tr class="hover:bg-slate-700/30">
           <td class="px-3 py-2.5 text-center font-bold sticky left-0 bg-slate-800">${r.no}</td>
           <td class="px-3 py-2.5 font-medium text-white sticky left-12 bg-slate-800 whitespace-nowrap">${r.name}</td>
-          ${r.cells.map(v => `<td class="px-2.5 py-2.5 text-center ${v > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-600'}">${v > 0 ? v : '-'}</td>`).join('')}
+          ${r.cells.map(v => {
+            if (v === 'absent') return `<td class="px-2.5 py-2.5 text-center text-rose-400 font-bold">ขาด</td>`;
+            if (v > 0) return `<td class="px-2.5 py-2.5 text-center text-emerald-400 font-semibold">${v}</td>`;
+            return `<td class="px-2.5 py-2.5 text-center text-slate-600">-</td>`;
+          }).join('')}
           <td class="px-3 py-2.5 text-right font-bold text-emerald-400">${r.rowSum.toLocaleString()}</td>
         </tr>
       `).join('');
@@ -2532,7 +2624,7 @@
       document.getElementById('check-input-date')?.addEventListener('change', renderCheckinView);
       document.getElementById('sub-summary-month')?.addEventListener('change', renderSubjectSummaryView);
       document.getElementById('ind-summary-month')?.addEventListener('change', renderIndividualSummaryView);
-
+      document.getElementById('ind-summary-mode')?.addEventListener('change', renderIndividualSummaryView);
       // Check-in Bulk & Save
       document.getElementById('btn-mark-all-present')?.addEventListener('click', () => {
         Object.keys(draftAttendance).forEach(id => draftAttendance[id] = 'present');
@@ -2671,31 +2763,32 @@
         const cls = document.getElementById('ind-summary-class').value;
         const sub = document.getElementById('ind-summary-subject').value;
         const month = document.getElementById('ind-summary-month').value;
-        const { activeDates, matrixRows } = getIndividualMatrixData(cls, sub, month);
+        const mode = document.getElementById('ind-summary-mode').value;
+        const { activeDates, matrixRows } = getIndividualMatrixData(cls, sub, month, mode);
 
         const html = `
           <div style="text-align: center; margin-bottom: 16px;">
             <h2 style="font-size: 20px; font-weight: bold; margin: 0;">บัญชีบันทึกเวลาเรียนรายบุคคล โรงเรียนวัดพระธาตุ</h2>
             <p style="font-size: 15px; margin: 6px 0 0 0;">ประจำเดือน${THAI_MONTHS[month]} ปีการศึกษา ${state.currentYear} • ระดับชั้น ${cls} • รายวิชา ${sub}</p>
           </div>
-          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
             <thead>
               <tr style="background: #f1f5f9;">
-                <th style="border: 1px solid #94a3b8; padding: 6px; width: 45px;">เลขที่</th>
-                <th style="border: 1px solid #94a3b8; padding: 6px; text-align: left; min-width: 160px;">ชื่อ - นามสกุล</th>
-                ${activeDates.map(d => `<th style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${parseInt(d.split('-')[2], 10)}</th>`).join('')}
-                <th style="border: 1px solid #94a3b8; padding: 6px; width: 55px;">รวมมา</th>
-                <th style="border: 1px solid #94a3b8; padding: 6px; width: 55px;">รวมขาด</th>
+                <th style="border: 1px solid #94a3b8; padding: 5px; width: 42px;">เลขที่</th>
+                <th style="border: 1px solid #94a3b8; padding: 5px; text-align: left; min-width: 150px;">ชื่อ - นามสกุล</th>
+                ${activeDates.map(dd => `<th style="border: 1px solid #94a3b8; padding: 4px; text-align: center;">${parseInt(dd, 10)}</th>`).join('')}
+                <th style="border: 1px solid #94a3b8; padding: 5px; width: 48px;">มา</th>
+                <th style="border: 1px solid #94a3b8; padding: 5px; width: 48px;">ขาด</th>
               </tr>
             </thead>
             <tbody>
               ${matrixRows.map(r => `
                 <tr>
-                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${r.no}</td>
-                  <td style="border: 1px solid #94a3b8; padding: 6px;">${r.name}</td>
-                  ${r.cells.map(st => `<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${st === 'present' ? '/' : (st === 'absent' ? 'ข' : '-')}</td>`).join('')}
-                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${r.present}</td>
-                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${r.absent}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center;">${r.no}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 5px;">${r.name}</td>
+                  ${r.cells.map(st => `<td style="border: 1px solid #94a3b8; padding: 4px; text-align: center;">${st === 'present' ? '/' : (st === 'absent' ? 'ข' : '-')}</td>`).join('')}
+                  <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold;">${r.present}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 5px; text-align: center; font-weight: bold;">${r.absent}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -2730,7 +2823,7 @@
                 <tr>
                   <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${r.no}</td>
                   <td style="border: 1px solid #94a3b8; padding: 6px;">${r.name}</td>
-                  ${r.cells.map(v => `<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${v > 0 ? v : '-'}</td>`).join('')}
+                  ${r.cells.map(v => `<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; ${v === 'absent' ? 'color: #e11d48; font-weight: bold;' : ''}">${v === 'absent' ? 'ขาด' : (v > 0 ? v : '-')}</td>`).join('')}
                   <td style="border: 1px solid #94a3b8; padding: 6px; text-align: right; font-weight: bold;">${r.rowSum.toLocaleString()}</td>
                 </tr>
               `).join('')}
