@@ -655,6 +655,30 @@
             <div id="admin-subject-chips" class="flex flex-wrap gap-2"></div>
           </div>
         </div>
+
+        <!-- Summary Table of All Subjects in Current Academic Year -->
+        <div class="bg-slate-800 border border-slate-700/80 rounded-2xl overflow-hidden">
+          <div class="p-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-table-list text-sky-400"></i>
+              <h4 class="text-sm font-bold text-white">ตารางสรุปรายวิชาทั้งหมดในปีการศึกษา <span id="admin-summary-year-label" class="text-indigo-400 tabular-nums"></span></h4>
+            </div>
+            <span id="admin-total-subjects-badge" class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-semibold tabular-nums">0 วิชา</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-900/90 text-xs text-slate-400 uppercase border-b border-slate-700">
+                <tr>
+                  <th class="px-4 py-3 text-center w-16">ลำดับ</th>
+                  <th class="px-4 py-3">ชื่อรายวิชา</th>
+                  <th class="px-4 py-3">ระดับชั้นที่เปิดสอน</th>
+                  <th class="px-4 py-3 text-center w-36">นักเรียนลงทะเบียน</th>
+                </tr>
+              </thead>
+              <tbody id="admin-subjects-summary-tbody" class="divide-y divide-slate-700/60 tabular-nums"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- Sub-Tab 2: Students Management -->
@@ -708,21 +732,6 @@
           </div>
         </div>
 
-        <!-- Student List Table -->
-        <div class="bg-slate-800 border border-slate-700/80 rounded-2xl overflow-hidden">
-          <div class="p-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
-              <span class="text-sm font-bold text-white">รายชื่อนักเรียน</span>
-              <select id="admin-filter-class" class="class-select bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"></select>
-            </div>
-            <button id="btn-admin-batch-delete" class="px-3.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-semibold transition">
-              <i class="fa-solid fa-trash mr-1"></i> ลบที่เลือก
-            </button>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="bg-slate-900/90 text-xs text-slate-400 uppercase border-b border-slate-700">
-                <tr>
         <!-- Student List Table Grouped by Subject then Class -->
         <div class="bg-slate-800 border border-slate-700/80 rounded-2xl overflow-hidden">
           <div class="p-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
@@ -1052,16 +1061,62 @@
       return map;
     }
 
+    function getAdminExpiry() {
+      let lsExp = 0, ssExp = 0, uiExp = 0, wnExp = 0;
+      try { lsExp = parseInt(localStorage.getItem('kroek_admin_expiry') || '0', 10) || 0; } catch (e) {}
+      try { ssExp = parseInt(sessionStorage.getItem('kroek_admin_expiry') || '0', 10) || 0; } catch (e) {}
+      try {
+        const ui = JSON.parse(sessionStorage.getItem('kroek_ui_session') || '{}');
+        uiExp = parseInt(ui.adminExpiry || '0', 10) || 0;
+      } catch (e) {}
+      try {
+        if (window.name && window.name.startsWith('kroek_admin_exp:')) {
+          wnExp = parseInt(window.name.split(':')[1] || '0', 10) || 0;
+        }
+      } catch (e) {}
+      return Math.max(lsExp, ssExp, uiExp, wnExp);
+    }
+
+    function setAdminExpiry(timestamp) {
+      try { localStorage.setItem('kroek_admin_expiry', String(timestamp)); } catch (e) {}
+      try { sessionStorage.setItem('kroek_admin_expiry', String(timestamp)); } catch (e) {}
+      try { window.name = 'kroek_admin_exp:' + String(timestamp); } catch (e) {}
+    }
+
+    function clearAdminExpiry() {
+      try { localStorage.removeItem('kroek_admin_expiry'); } catch (e) {}
+      try { sessionStorage.removeItem('kroek_admin_expiry'); } catch (e) {}
+      try { window.name = ''; } catch (e) {}
+      try {
+        const ui = JSON.parse(sessionStorage.getItem('kroek_ui_session') || '{}');
+        delete ui.adminExpiry;
+        ui.adminUnlocked = false;
+        sessionStorage.setItem('kroek_ui_session', JSON.stringify(ui));
+      } catch (e) {}
+    }
+
     function isAdminSessionValid() {
-      const expiry = parseInt(localStorage.getItem('kroek_admin_expiry') || '0', 10);
-      if (expiry > Date.now()) return true;
-      localStorage.removeItem('kroek_admin_expiry');
+      const expiry = getAdminExpiry();
+      if (expiry > Date.now()) {
+        setAdminExpiry(expiry);
+        return true;
+      }
+      clearAdminExpiry();
       return false;
     }
 
+    function safeGetJSON(storage, key, fallback) {
+      try {
+        const raw = storage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
     // Restore session state after auto-reload
-    const savedSession = JSON.parse(sessionStorage.getItem('kroek_ui_session') || '{}');
-    const initialClasses = JSON.parse(localStorage.getItem('kroek_classes')) || [...DEFAULT_CLASSES];
+    const savedSession = safeGetJSON(sessionStorage, 'kroek_ui_session', {});
+    const initialClasses = safeGetJSON(localStorage, 'kroek_classes', null) || [...DEFAULT_CLASSES];
 
     const state = {
       currentYear: savedSession.currentYear || '2569',
@@ -1071,34 +1126,21 @@
       alertFilter: 'all',
       filters: savedSession.filters || {},
       adminUnlocked: isAdminSessionValid(),
-      adminPin: localStorage.getItem('kroek_admin_pin') || '1234',
+      adminPin: (function() { try { return localStorage.getItem('kroek_admin_pin') || '1234'; } catch (e) { return '1234'; } })(),
       classes: initialClasses,
-      subjectsByClass: JSON.parse(localStorage.getItem('kroek_subjects_by_class')) || buildDefaultSubjectsMap(initialClasses),
+      subjectsByLevel: safeGetJSON(localStorage, 'kroek_subjects_map', null) || buildDefaultSubjectsMap(initialClasses),
       students: [],
       attendance: {},
       savings: {},
       editingStudentId: null,
-      parsedBulkStudents: [],
+      pendingBulkStudents: [],
       activeNumpadStudentId: null,
       numpadVal: '0',
       pinEntered: '',
-      donutChart: null,
-      barChart: null
+      unsubStudents: null,
+      unsubAttendance: null,
+      unsubSavings: null
     };
-
-    let unsubscribeFns = [];
-
-    function showToast(msg, type = 'success') {
-      const box = document.getElementById('toast-box');
-      const icon = document.getElementById('toast-icon');
-      const text = document.getElementById('toast-message');
-      text.textContent = msg;
-      icon.className = type === 'error'
-        ? 'fa-solid fa-circle-exclamation text-rose-400'
-        : 'fa-solid fa-circle-check text-emerald-400';
-      box.classList.remove('hidden');
-      setTimeout(() => box.classList.add('hidden'), 2800);
-    }
 
     // Save current page/filters and reload page cleanly
     function persistSessionAndReload(toastMessage) {
@@ -1109,288 +1151,375 @@
         'ind-summary-class', 'ind-summary-subject', 'ind-summary-month',
         'savings-daily-class', 'savings-daily-date',
         'savings-monthly-class', 'savings-monthly-month', 'savings-monthly-mode',
-        'admin-subject-manage-class', 'admin-student-class', 'admin-filter-class'
+        'admin-student-class', 'admin-subject-manage-class', 'admin-filter-class'
       ];
       const filters = {};
       filterIds.forEach(id => {
         const el = document.getElementById(id);
         if (el && el.value) filters[id] = el.value;
       });
-      sessionStorage.setItem('kroek_ui_session', JSON.stringify({
-        currentYear: state.currentYear,
-        currentMenu: state.currentMenu,
-        adminSubtab: state.adminSubtab,
-        savingsTab: state.savingsTab,
-        filters
-      }));
+      const currentExpiry = getAdminExpiry();
+      if (currentExpiry > Date.now()) {
+        setAdminExpiry(currentExpiry);
+      }
+      try {
+        sessionStorage.setItem('kroek_ui_session', JSON.stringify({
+          currentYear: state.currentYear,
+          currentMenu: state.currentMenu,
+          adminSubtab: state.adminSubtab,
+          savingsTab: state.savingsTab,
+          adminUnlocked: currentExpiry > Date.now(),
+          adminExpiry: currentExpiry,
+          filters
+        }));
+      } catch (e) {}
       if (toastMessage) showToast(toastMessage, 'success');
       setTimeout(() => {
         window.location.reload();
       }, 450);
     }
 
-    // Auto Gender Detection from Thai Prefix
+    // Helpers
+    function getSubjectsForClass(cls) {
+      if (!cls) return [...PRIMARY_SUBJECTS];
+      if (Array.isArray(state.subjectsByLevel[cls])) {
+        return state.subjectsByLevel[cls];
+      }
+      return cls.startsWith('ม.') ? [...SECONDARY_SUBJECTS] : [...PRIMARY_SUBJECTS];
+    }
+
     function detectGender(name) {
       const clean = (name || '').trim();
-      if (/^(เด็กหญิง|ด\.ญ\.|นางสาว|น\.ส\.|นาง)/.test(clean)) return 'F';
-      return 'M';
+      if (/^(เด็กหญิง|ด\.ญ\.|นางสาว|น\.ส\.|นาง)/.test(clean)) return 'female';
+      if (/^(เด็กชาย|ด\.ช\.|นาย)/.test(clean)) return 'male';
+      return 'male';
     }
 
-    function getSubjectsForClass(className) {
-      if (!className) return PRIMARY_SUBJECTS;
-      if (Array.isArray(state.subjectsByClass[className])) {
-        return state.subjectsByClass[className];
+    function renderGenderBadge(gender) {
+      if (gender === 'female') {
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">♀ หญิง</span>`;
       }
-      return className.startsWith('ม.') ? SECONDARY_SUBJECTS : PRIMARY_SUBJECTS;
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">♂ ชาย</span>`;
     }
 
-    function isStudentEnrolledInSubject(stu, sub) {
-      if (!sub) return true;
-      if (Array.isArray(stu.subjects)) {
-        return stu.subjects.includes(sub);
-      }
-      return true;
-    }
-
-    function renderSubjectCheckboxes(containerId, className, selectedSubjects = null) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-      const subjects = getSubjectsForClass(className);
-      if (subjects.length === 0) {
-        container.innerHTML = `<span class="text-xs text-slate-500">ยังไม่มีรายวิชาในระดับชั้นนี้ กรุณาเพิ่มวิชาในแท็บ "จัดการห้องเรียนและวิชา"</span>`;
-        return;
-      }
-      container.innerHTML = subjects.map(sub => {
-        const checked = selectedSubjects === null ? true : selectedSubjects.includes(sub);
-        return `
-          <label class="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:border-indigo-500 text-xs text-slate-200 select-none">
-            <input type="checkbox" value="${sub}" ${checked ? 'checked' : ''} class="rounded text-indigo-500 focus:ring-0" />
-            <span>${sub}</span>
-          </label>`;
-      }).join('');
+    function normalizeStudent(s) {
+      const cls = s.class || s.className || state.classes[0] || 'ป.1';
+      return {
+        id: s.id || ('stu_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+        no: parseInt(s.no, 10) || 1,
+        name: (s.name || '').trim(),
+        gender: s.gender || detectGender(s.name),
+        class: cls,
+        subjects: Array.isArray(s.subjects) && s.subjects.length > 0 ? s.subjects : [...getSubjectsForClass(cls)]
+      };
     }
 
     function getTodayISO() {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
     }
 
-    // Populate Dropdowns
-    function populateYearSelects() {
+    function showToast(msg, type = 'success') {
+      const box = document.getElementById('toast-box');
+      const icon = document.getElementById('toast-icon');
+      const text = document.getElementById('toast-message');
+      text.textContent = msg;
+      if (type === 'error') {
+        icon.className = 'fa-solid fa-circle-exclamation text-rose-400';
+      } else {
+        icon.className = 'fa-solid fa-circle-check text-emerald-400';
+      }
+      box.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => box.classList.add('hidden'), 3000);
+    }
+
+    function updateFirebaseStatus(connected, errorMsg = '') {
+      const dot = document.getElementById('firebase-status-dot');
+      const txt = document.getElementById('firebase-status-text');
+      const banner = document.getElementById('firebase-permission-alert');
+      if (connected) {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        txt.textContent = 'เชื่อมต่อ Firebase Cloud แล้ว';
+        banner.classList.add('hidden');
+      } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+        txt.textContent = errorMsg || 'โหมดสำรองข้อมูลในเครื่อง';
+        banner.classList.remove('hidden');
+      }
+    }
+
+    function handleFirestoreError(err) {
+      console.warn('Firestore warning:', err?.message || err);
+      updateFirebaseStatus(false, 'โหมดออฟไลน์ (ติดสิทธิ์ Rules)');
+    }
+
+    // ==================== CLOUD & LOCAL STORAGE SYNC ====================
+    function loadYearFromLocal(year) {
+      const rawStudents = safeGetJSON(localStorage, `kroek_${year}_students`, []);
+      state.students = Array.isArray(rawStudents) ? rawStudents.map(normalizeStudent) : [];
+      state.attendance = safeGetJSON(localStorage, `kroek_${year}_attendance`, {});
+      state.savings = safeGetJSON(localStorage, `kroek_${year}_savings`, {});
+    }
+
+    function subscribeToYearData(year) {
+      if (state.unsubStudents) state.unsubStudents();
+      if (state.unsubAttendance) state.unsubAttendance();
+      if (state.unsubSavings) state.unsubSavings();
+
+      loadYearFromLocal(year);
+      renderCurrentMenu();
+
+      // Metadata listener
+      onSnapshot(doc(db, 'metadata', 'config'), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data.classes) && data.classes.length > 0) {
+            state.classes = data.classes;
+            try { localStorage.setItem('kroek_classes', JSON.stringify(state.classes)); } catch (e) {}
+          }
+          if (data.subjectsByLevel && typeof data.subjectsByLevel === 'object') {
+            state.subjectsByLevel = data.subjectsByLevel;
+            try { localStorage.setItem('kroek_subjects_map', JSON.stringify(state.subjectsByLevel)); } catch (e) {}
+          }
+          populateAllClassDropdowns();
+          populateAllSubjectDropdowns();
+          renderCurrentMenu();
+        }
+        updateFirebaseStatus(true);
+      }, handleFirestoreError);
+
+      // Students listener
+      state.unsubStudents = onSnapshot(doc(db, 'years', `${year}_students`), (snap) => {
+        if (snap.exists()) {
+          const list = snap.data().list || [];
+          state.students = list.map(normalizeStudent);
+          try { localStorage.setItem(`kroek_${year}_students`, JSON.stringify(state.students)); } catch (e) {}
+          renderCurrentMenu();
+        }
+        updateFirebaseStatus(true);
+      }, handleFirestoreError);
+
+      // Attendance listener
+      state.unsubAttendance = onSnapshot(doc(db, 'years', `${year}_attendance`), (snap) => {
+        if (snap.exists()) {
+          state.attendance = snap.data().records || {};
+          try { localStorage.setItem(`kroek_${year}_attendance`, JSON.stringify(state.attendance)); } catch (e) {}
+          renderCurrentMenu();
+        }
+      }, handleFirestoreError);
+
+      // Savings listener
+      state.unsubSavings = onSnapshot(doc(db, 'years', `${year}_savings`), (snap) => {
+        if (snap.exists()) {
+          state.savings = snap.data().records || {};
+          try { localStorage.setItem(`kroek_${year}_savings`, JSON.stringify(state.savings)); } catch (e) {}
+          renderCurrentMenu();
+        }
+      }, handleFirestoreError);
+    }
+
+    async function saveMetadataToCloud() {
+      try { localStorage.setItem('kroek_classes', JSON.stringify(state.classes)); } catch (e) {}
+      try { localStorage.setItem('kroek_subjects_map', JSON.stringify(state.subjectsByLevel)); } catch (e) {}
+      try {
+        await setDoc(doc(db, 'metadata', 'config'), {
+          classes: state.classes,
+          subjectsByLevel: state.subjectsByLevel
+        }, { merge: true });
+      } catch (e) {
+        handleFirestoreError(e);
+      }
+    }
+
+    async function saveStudentsToCloud(year = state.currentYear, list = state.students) {
+      try { localStorage.setItem(`kroek_${year}_students`, JSON.stringify(list)); } catch (e) {}
+      try {
+        await setDoc(doc(db, 'years', `${year}_students`), { list });
+      } catch (e) {
+        handleFirestoreError(e);
+      }
+    }
+
+    async function saveAttendanceToCloud(year = state.currentYear, records = state.attendance) {
+      try { localStorage.setItem(`kroek_${year}_attendance`, JSON.stringify(records)); } catch (e) {}
+      try {
+        await setDoc(doc(db, 'years', `${year}_attendance`), { records });
+      } catch (e) {
+        handleFirestoreError(e);
+      }
+    }
+
+    async function saveSavingsToCloud(year = state.currentYear, records = state.savings) {
+      try { localStorage.setItem(`kroek_${year}_savings`, JSON.stringify(records)); } catch (e) {}
+      try {
+        await setDoc(doc(db, 'years', `${year}_savings`), { records });
+      } catch (e) {
+        handleFirestoreError(e);
+      }
+    }
+
+    // ==================== DROPDOWN POPULATION ====================
+    function populateYearDropdowns() {
       const years = ['2568', '2569', '2570'];
       document.querySelectorAll('.year-select').forEach(sel => {
         sel.innerHTML = years.map(y => `<option value="${y}" ${y === state.currentYear ? 'selected' : ''}>ปีการศึกษา ${y}</option>`).join('');
       });
     }
 
-    function populateClassSelects() {
+    function populateAllClassDropdowns() {
       document.querySelectorAll('.class-select').forEach(sel => {
-        const prev = sel.value || state.filters[sel.id];
+        const prev = state.filters[sel.id] || sel.value;
         sel.innerHTML = state.classes.map(c => `<option value="${c}">${c}</option>`).join('');
-        if (prev && state.classes.includes(prev)) sel.value = prev;
+        if (prev && state.classes.includes(prev)) {
+          sel.value = prev;
+        }
       });
-      const adminFilterSel = document.getElementById('admin-filter-class');
-      if (adminFilterSel) {
-        const prev = adminFilterSel.value || state.filters['admin-filter-class'] || 'ALL';
-        adminFilterSel.innerHTML = `<option value="ALL">ทุกระดับชั้น</option>` +
-          state.classes.map(c => `<option value="${c}">${c}</option>`).join('');
-        adminFilterSel.value = (prev === 'ALL' || state.classes.includes(prev)) ? prev : 'ALL';
+
+      const filterSel = document.getElementById('admin-filter-class');
+      if (filterSel) {
+        const prevFilter = state.filters['admin-filter-class'] || filterSel.value || 'ALL';
+        filterSel.innerHTML = `<option value="ALL">ทุกระดับชั้น (${state.students.length} คน)</option>` +
+          state.classes.map(c => `<option value="${c}">ห้อง ${c}</option>`).join('');
+        filterSel.value = (prevFilter === 'ALL' || state.classes.includes(prevFilter)) ? prevFilter : 'ALL';
       }
     }
 
-    function populateSubjectSelects() {
-      const pairs = [
-        ['dash-filter-class', 'dash-filter-subject'],
-        ['check-select-class', 'check-select-subject'],
-        ['sub-summary-class', 'sub-summary-subject'],
-        ['ind-summary-class', 'ind-summary-subject']
-      ];
-      pairs.forEach(([clsId, subId]) => {
-        const clsEl = document.getElementById(clsId);
-        const subEl = document.getElementById(subId);
-        if (!clsEl || !subEl) return;
-        const subjects = getSubjectsForClass(clsEl.value);
-        const prev = subEl.value || state.filters[subId];
-        subEl.innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (prev && subjects.includes(prev)) subEl.value = prev;
-      });
-    }
-
-    // Normalize legacy student objects safely
-    function normalizeStudentList(rawList) {
-      if (!Array.isArray(rawList)) return [];
-      return rawList.map((s, idx) => {
-        const className = s.className || s.class || state.classes[0] || 'ป.1';
-        const name = s.name || s.fullname || 'ไม่ระบุชื่อ';
-        return {
-          id: s.id || `stu_${idx}_${Date.now()}`,
-          no: Number(s.no) || (idx + 1),
-          name,
-          gender: s.gender || detectGender(name),
-          className,
-          subjects: Array.isArray(s.subjects) ? s.subjects : null
-        };
-      });
-    }
-
-    // Load LocalStorage Instantly
-    function loadLocalData() {
-      if (!localStorage.getItem('kroek_sample_cleared_v1')) {
-        ['2568', '2569', '2570'].forEach(yr => {
-          localStorage.removeItem(`kroek_${yr}_students`);
-          localStorage.removeItem(`kroek_${yr}_attendance`);
-          localStorage.removeItem(`kroek_${yr}_savings`);
-        });
-        localStorage.setItem('kroek_sample_cleared_v1', 'true');
-      }
-      try {
-        const rawStudents = JSON.parse(localStorage.getItem(`kroek_${state.currentYear}_students`) || '[]');
-        state.students = normalizeStudentList(rawStudents);
-        state.attendance = JSON.parse(localStorage.getItem(`kroek_${state.currentYear}_attendance`) || '{}');
-        state.savings = JSON.parse(localStorage.getItem(`kroek_${state.currentYear}_savings`) || '{}');
-      } catch (e) {
-        state.students = [];
-        state.attendance = {};
-        state.savings = {};
+    function syncSubjectDropdownForClass(classSelectId, subjectSelectId) {
+      const clsEl = document.getElementById(classSelectId);
+      const subEl = document.getElementById(subjectSelectId);
+      if (!clsEl || !subEl) return;
+      const cls = clsEl.value || state.classes[0];
+      const subjects = getSubjectsForClass(cls);
+      const prevSub = state.filters[subjectSelectId] || subEl.value;
+      subEl.innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+      if (prevSub && subjects.includes(prevSub)) {
+        subEl.value = prevSub;
       }
     }
 
-    // Firebase Realtime Sync Listeners
-    function startFirebaseSync() {
-      unsubscribeFns.forEach(fn => fn());
-      unsubscribeFns = [];
-
-      const handleFirestoreError = (err) => {
-        console.warn('Firestore sync fallback:', err.message);
-        document.getElementById('firebase-status-dot').className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
-        document.getElementById('firebase-status-text').textContent = 'โหมดออฟไลน์ (บันทึกในเครื่อง)';
-        document.getElementById('firebase-permission-alert').classList.remove('hidden');
-      };
-
-      const setConnectedStatus = () => {
-        document.getElementById('firebase-status-dot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
-        document.getElementById('firebase-status-text').textContent = 'เชื่อมต่อ Firebase Cloud แล้ว';
-        document.getElementById('firebase-permission-alert').classList.add('hidden');
-      };
-
-      // 1. Classrooms
-      unsubscribeFns.push(onSnapshot(doc(db, 'config', 'classrooms'), (docSnap) => {
-        setConnectedStatus();
-        if (docSnap.exists() && Array.isArray(docSnap.data().list) && docSnap.data().list.length > 0) {
-          state.classes = docSnap.data().list;
-          localStorage.setItem('kroek_classes', JSON.stringify(state.classes));
-          populateClassSelects();
-          populateSubjectSelects();
-          renderCurrentMenu();
-        }
-      }, handleFirestoreError));
-
-      // 1.5 Subjects by Classroom
-      unsubscribeFns.push(onSnapshot(doc(db, 'config', 'subjects'), (docSnap) => {
-        setConnectedStatus();
-        if (docSnap.exists() && docSnap.data().byClass) {
-          state.subjectsByClass = { ...state.subjectsByClass, ...docSnap.data().byClass };
-          localStorage.setItem('kroek_subjects_by_class', JSON.stringify(state.subjectsByClass));
-          populateSubjectSelects();
-          renderCurrentMenu();
-        }
-      }, handleFirestoreError));
-
-      // 2. Students
-      unsubscribeFns.push(onSnapshot(doc(db, 'years', `${state.currentYear}_students`), (docSnap) => {
-        setConnectedStatus();
-        if (docSnap.exists()) {
-          state.students = normalizeStudentList(docSnap.data().list || []);
-          localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-          renderCurrentMenu();
-        }
-      }, handleFirestoreError));
-
-      // 3. Attendance
-      unsubscribeFns.push(onSnapshot(doc(db, 'years', `${state.currentYear}_attendance`), (docSnap) => {
-        setConnectedStatus();
-        if (docSnap.exists()) {
-          state.attendance = docSnap.data().records || {};
-          localStorage.setItem(`kroek_${state.currentYear}_attendance`, JSON.stringify(state.attendance));
-          renderCurrentMenu();
-        }
-      }, handleFirestoreError));
-
-      // 4. Savings
-      unsubscribeFns.push(onSnapshot(doc(db, 'years', `${state.currentYear}_savings`), (docSnap) => {
-        setConnectedStatus();
-        if (docSnap.exists()) {
-          state.savings = docSnap.data().records || {};
-          localStorage.setItem(`kroek_${state.currentYear}_savings`, JSON.stringify(state.savings));
-          renderCurrentMenu();
-        }
-      }, handleFirestoreError));
+    function populateAllSubjectDropdowns() {
+      syncSubjectDropdownForClass('dash-filter-class', 'dash-filter-subject');
+      syncSubjectDropdownForClass('check-select-class', 'check-select-subject');
+      syncSubjectDropdownForClass('sub-summary-class', 'sub-summary-subject');
+      syncSubjectDropdownForClass('ind-summary-class', 'ind-summary-subject');
     }
 
-    // ==================== RENDER FUNCTIONS ====================
+    function updatePinDots(isError) {
+      const card = document.getElementById('pin-modal-card');
+      if (isError && card) {
+        card.classList.add('animate-shake');
+        setTimeout(() => card.classList.remove('animate-shake'), 400);
+      }
+      document.querySelectorAll('.pin-dot').forEach((dot, idx) => {
+        if (isError) {
+          dot.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-rose-500 transition-colors';
+        } else if (idx < state.pinEntered.length) {
+          dot.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-indigo-400 transition-colors';
+        } else {
+          dot.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-slate-600 transition-colors';
+        }
+      });
+    }
+
+    // ==================== NAVIGATION & MENU SWITCHING ====================
+    function switchMenu(menuId) {
+      if (menuId === 'admin' && !isAdminSessionValid()) {
+        state.adminUnlocked = false;
+        state.pinEntered = '';
+        updatePinDots(false);
+        document.getElementById('modal-pin').classList.remove('hidden');
+        return;
+      }
+
+      state.currentMenu = menuId;
+      document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
+      document.getElementById(`view-${menuId}`)?.classList.remove('hidden');
+
+      document.querySelectorAll('.nav-item').forEach(btn => {
+        if (btn.dataset.menu === menuId) {
+          btn.className = 'nav-item w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium bg-indigo-500 text-white shadow-md shadow-indigo-500/20 transition';
+        } else {
+          btn.className = 'nav-item w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-700/60 hover:text-white transition';
+        }
+      });
+
+      // Close mobile sidebar
+      document.getElementById('sidebar').classList.add('-translate-x-full');
+      document.getElementById('mobile-backdrop').classList.add('hidden');
+
+      renderCurrentMenu();
+    }
 
     function renderCurrentMenu() {
       updateAlertBadge();
-      if (state.currentMenu === 'dashboard') renderDashboard();
-      else if (state.currentMenu === 'checkin') renderCheckinList();
-      else if (state.currentMenu === 'subject-summary') renderSubjectSummary();
-      else if (state.currentMenu === 'individual-summary') renderIndividualSummary();
-      else if (state.currentMenu === 'alerts') renderAlertsView();
-      else if (state.currentMenu === 'savings') {
-        renderSavingsDaily();
-        renderSavingsMonthlyMatrix();
-      } else if (state.currentMenu === 'admin') renderAdminView();
+      switch (state.currentMenu) {
+        case 'dashboard': renderDashboardView(); break;
+        case 'checkin': renderCheckinView(); break;
+        case 'subject-summary': renderSubjectSummaryView(); break;
+        case 'individual-summary': renderIndividualSummaryView(); break;
+        case 'alerts': renderAlertsView(); break;
+        case 'savings': renderSavingsView(); break;
+        case 'admin': renderAdminView(); break;
+      }
     }
 
-    // 1. Dashboard Render
-    function renderDashboard() {
+    // ==================== VIEW 1: DASHBOARD RENDER ====================
+    let donutChartInstance = null;
+    let bar7DaysChartInstance = null;
+
+    function renderDashboardView() {
       const cls = document.getElementById('dash-filter-class')?.value || state.classes[0];
-      const sub = document.getElementById('dash-filter-subject')?.value || '';
-      const classStudents = state.students.filter(s => s.className === cls && isStudentEnrolledInSubject(s, sub));
-      const maleCount = classStudents.filter(s => s.gender === 'M').length;
-      const femaleCount = classStudents.filter(s => s.gender === 'F').length;
+      const sub = document.getElementById('dash-filter-subject')?.value || getSubjectsForClass(cls)[0];
 
-      let presentTotal = 0;
-      let absentTotal = 0;
-      const dailyStats = {};
+      const classStudents = state.students.filter(s => s.class === cls && (!s.subjects || s.subjects.includes(sub)));
+      const males = classStudents.filter(s => s.gender === 'male').length;
+      const females = classStudents.filter(s => s.gender === 'female').length;
 
-      Object.entries(state.attendance).forEach(([dateKey, subjectsObj]) => {
-        const record = subjectsObj?.[sub];
-        if (!record) return;
-        let dayP = 0;
-        let dayA = 0;
-        classStudents.forEach(stu => {
-          const st = record[stu.id];
-          if (st === 'P') { presentTotal++; dayP++; }
-          else if (st === 'A') { absentTotal++; dayA++; }
-        });
-        if (dayP + dayA > 0) {
-          dailyStats[dateKey] = { P: dayP, A: dayA };
+      let presentCount = 0;
+      let absentCount = 0;
+      const dateTotals = {};
+
+      Object.entries(state.attendance).forEach(([key, dayMap]) => {
+        const parts = key.split('|');
+        if (parts.length === 3 && parts[0] === cls && parts[1] === sub) {
+          const dt = parts[2];
+          if (!dateTotals[dt]) dateTotals[dt] = { present: 0, absent: 0 };
+          classStudents.forEach(stu => {
+            const status = dayMap[stu.id];
+            if (status === 'present') {
+              presentCount++;
+              dateTotals[dt].present++;
+            } else if (status === 'absent') {
+              absentCount++;
+              dateTotals[dt].absent++;
+            }
+          });
         }
       });
 
-      const totalRecords = presentTotal + absentTotal;
-      const rate = totalRecords > 0 ? Math.round((presentTotal / totalRecords) * 100) : 0;
+      const totalRecords = presentCount + absentCount;
+      const rate = totalRecords > 0 ? ((presentCount / totalRecords) * 100).toFixed(1) : '0.0';
 
-      document.getElementById('dash-stat-total').textContent = classStudents.length;
-      document.getElementById('dash-stat-gender').textContent = `ชาย ${maleCount} • หญิง ${femaleCount}`;
+      document.getElementById('dash-stat-total').textContent = `${classStudents.length} คน`;
+      document.getElementById('dash-stat-gender').textContent = `♂ ชาย ${males} • ♀ หญิง ${females}`;
       document.getElementById('dash-stat-rate').textContent = `${rate}%`;
-      document.getElementById('dash-stat-present').textContent = presentTotal;
-      document.getElementById('dash-stat-absent').textContent = absentTotal;
+      document.getElementById('dash-stat-present').textContent = `${presentCount} ครั้ง`;
+      document.getElementById('dash-stat-absent').textContent = `${absentCount} ครั้ง`;
 
       // Donut Chart
       const donutCtx = document.getElementById('chart-donut')?.getContext('2d');
       if (donutCtx) {
-        if (state.donutChart) state.donutChart.destroy();
-        state.donutChart = new Chart(donutCtx, {
+        if (donutChartInstance) donutChartInstance.destroy();
+        donutChartInstance = new Chart(donutCtx, {
           type: 'doughnut',
           data: {
             labels: ['มาเรียน', 'ขาดเรียน'],
             datasets: [{
-              data: totalRecords > 0 ? [presentTotal, absentTotal] : [1, 0],
+              data: totalRecords > 0 ? [presentCount, absentCount] : [1, 0],
               backgroundColor: totalRecords > 0 ? ['#10b981', '#f43f5e'] : ['#334155', '#1e293b'],
               borderWidth: 0
             }]
@@ -1398,248 +1527,301 @@
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '72%',
+            cutout: '70%',
             plugins: {
-              legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { family: 'Inter' } } }
+              legend: { position: 'bottom', labels: { color: '#cbd5e1', font: { family: 'Sarabun', size: 13 } } }
             }
           }
         });
       }
 
-      // 7-Days Bar Chart
+      // 7-Day Bar Chart
       const barCtx = document.getElementById('chart-bar-7days')?.getContext('2d');
       if (barCtx) {
-        if (state.barChart) state.barChart.destroy();
-        const sortedDates = Object.keys(dailyStats).sort().slice(-7);
-        state.barChart = new Chart(barCtx, {
+        if (bar7DaysChartInstance) bar7DaysChartInstance.destroy();
+        const sortedDates = Object.keys(dateTotals).sort().slice(-7);
+        const labels = sortedDates.length > 0 ? sortedDates.map(d => d.slice(5)) : ['ไม่มีข้อมูล'];
+        const pData = sortedDates.length > 0 ? sortedDates.map(d => dateTotals[d].present) : [0];
+        const aData = sortedDates.length > 0 ? sortedDates.map(d => dateTotals[d].absent) : [0];
+
+        bar7DaysChartInstance = new Chart(barCtx, {
           type: 'bar',
           data: {
-            labels: sortedDates.length > 0 ? sortedDates : ['ยังไม่มีข้อมูล'],
+            labels,
             datasets: [
-              {
-                label: 'มาเรียน',
-                data: sortedDates.length > 0 ? sortedDates.map(d => dailyStats[d].P) : [0],
-                backgroundColor: '#10b981',
-                borderRadius: 6
-              },
-              {
-                label: 'ขาดเรียน',
-                data: sortedDates.length > 0 ? sortedDates.map(d => dailyStats[d].A) : [0],
-                backgroundColor: '#f43f5e',
-                borderRadius: 6
-              }
+              { label: 'มาเรียน', data: pData, backgroundColor: '#10b981', borderRadius: 6 },
+              { label: 'ขาดเรียน', data: aData, backgroundColor: '#f43f5e', borderRadius: 6 }
             ]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-              x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+              x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
               y: { beginAtZero: true, ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: '#334155' } }
             },
             plugins: {
-              legend: { labels: { color: '#cbd5e1' } }
+              legend: { labels: { color: '#cbd5e1', font: { family: 'Sarabun' } } }
             }
           }
         });
       }
     }
 
-    // 2. Daily Check-in List
-    function renderCheckinList() {
-      const cls = document.getElementById('check-select-class')?.value || state.classes[0];
-      const sub = document.getElementById('check-select-subject')?.value || '';
-      const dateVal = document.getElementById('check-input-date')?.value || '';
-      document.getElementById('check-active-subject-badge').textContent = `วิชา: ${sub}`;
+    // ==================== VIEW 2: DAILY CHECK-IN RENDER ====================
+    let draftAttendance = {};
 
-      const listEl = document.getElementById('check-student-list');
+    function renderCheckinView() {
+      const cls = document.getElementById('check-select-class')?.value || state.classes[0];
+      const sub = document.getElementById('check-select-subject')?.value || getSubjectsForClass(cls)[0];
+      const dateVal = document.getElementById('check-input-date')?.value || getTodayISO();
+
+      document.getElementById('check-active-subject-badge').textContent = `วิชา: ${sub} (${cls})`;
+
       const students = state.students
-        .filter(s => s.className === cls && isStudentEnrolledInSubject(s, sub))
+        .filter(s => s.class === cls && (!s.subjects || s.subjects.includes(sub)))
         .sort((a, b) => a.no - b.no);
 
       document.getElementById('check-student-count').textContent = `${students.length} คน`;
 
+      const recordKey = `${cls}|${sub}|${dateVal}`;
+      const existing = state.attendance[recordKey] || {};
+      draftAttendance = {};
+
+      students.forEach(s => {
+        draftAttendance[s.id] = existing[s.id] || 'present';
+      });
+
+      const container = document.getElementById('check-student-list');
       if (students.length === 0) {
-        listEl.innerHTML = `
-          <div class="bg-slate-800/60 border border-dashed border-slate-700 rounded-2xl p-8 text-center text-slate-400 text-sm">
-            ยังไม่มีรายชื่อนักเรียนที่ลงทะเบียนเรียนวิชา <strong class="text-sky-400">${sub}</strong> ในห้อง <strong class="text-white">${cls}</strong>
-          </div>`;
+        container.innerHTML = `<div class="bg-slate-800 border border-slate-700 rounded-2xl p-8 text-center text-slate-400 text-sm">ยังไม่มีรายชื่อนักเรียนที่ลงทะเบียนวิชา <strong>${sub}</strong> ในห้อง <strong>${cls}</strong></div>`;
         return;
       }
 
-      const dayRecord = state.attendance?.[dateVal]?.[sub] || {};
-
-      listEl.innerHTML = students.map(stu => {
-        const currentStatus = dayRecord[stu.id] || 'P';
-        const genderBadge = stu.gender === 'M'
-          ? `<span class="text-xs font-bold text-[#60a5fa] bg-[#60a5fa]/15 px-2 py-0.5 rounded-lg">♂ ชาย</span>`
-          : `<span class="text-xs font-bold text-[#f472b6] bg-[#f472b6]/15 px-2 py-0.5 rounded-lg">♀ หญิง</span>`;
-
+      container.innerHTML = students.map(stu => {
+        const isPresent = draftAttendance[stu.id] === 'present';
         return `
-          <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-3.5 sm:px-5 flex items-center justify-between gap-3" data-student-id="${stu.id}">
-            <div class="flex items-center gap-3 min-w-0">
-              <span class="w-8 h-8 rounded-xl bg-slate-900 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 tabular-nums">${stu.no}</span>
-              <div class="truncate">
-                <p class="text-sm font-semibold text-white truncate">${stu.name}</p>
-                <div class="mt-0.5">${genderBadge}</div>
+          <div class="bg-slate-800 border border-slate-700/80 rounded-2xl p-3.5 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="w-8 h-8 rounded-xl bg-slate-900 text-slate-300 font-bold text-xs flex items-center justify-center tabular-nums shrink-0">${stu.no}</span>
+              <div>
+                <p class="text-sm font-semibold text-white">${stu.name}</p>
+                <div class="mt-0.5">${renderGenderBadge(stu.gender)}</div>
               </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <button type="button" data-status="P" class="att-choice-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${currentStatus === 'P' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'bg-slate-900 text-slate-400 hover:text-white'}">
-                มา
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <button type="button" data-stu-id="${stu.id}" data-status="present" class="att-toggle-btn px-4 py-2 rounded-xl text-xs font-bold transition ${isPresent ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-900 text-slate-400 hover:text-white'}">
+                <i class="fa-solid fa-check mr-1"></i> มาเรียน
               </button>
-              <button type="button" data-status="A" class="att-choice-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${currentStatus === 'A' ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30' : 'bg-slate-900 text-slate-400 hover:text-white'}">
-                ขาด
+              <button type="button" data-stu-id="${stu.id}" data-status="absent" class="att-toggle-btn px-4 py-2 rounded-xl text-xs font-bold transition ${!isPresent ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'bg-slate-900 text-slate-400 hover:text-white'}">
+                <i class="fa-solid fa-xmark mr-1"></i> ขาดเรียน
               </button>
             </div>
-          </div>`;
+          </div>
+        `;
       }).join('');
 
-      listEl.querySelectorAll('.att-choice-btn').forEach(btn => {
+      container.querySelectorAll('.att-toggle-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          const row = btn.closest('[data-student-id]');
-          const chosen = btn.dataset.status;
-          row.querySelectorAll('.att-choice-btn').forEach(b => {
-            const isP = b.dataset.status === 'P';
-            const active = b.dataset.status === chosen;
-            b.className = `att-choice-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              active
-                ? (isP ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'bg-rose-500 text-white shadow-md shadow-rose-500/30')
-                : 'bg-slate-900 text-slate-400 hover:text-white'
-            }`;
-          });
+          const id = btn.dataset.stuId;
+          const status = btn.dataset.status;
+          draftAttendance[id] = status;
+          renderCheckinDraftButtons();
         });
       });
     }
 
-    // 3. Subject Summary Table
-    function renderSubjectSummary() {
+    function renderCheckinDraftButtons() {
+      document.querySelectorAll('.att-toggle-btn').forEach(btn => {
+        const id = btn.dataset.stuId;
+        const st = btn.dataset.status;
+        const active = draftAttendance[id] === st;
+        if (st === 'present') {
+          btn.className = `att-toggle-btn px-4 py-2 rounded-xl text-xs font-bold transition ${active ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' : 'bg-slate-900 text-slate-400 hover:text-white'}`;
+        } else {
+          btn.className = `att-toggle-btn px-4 py-2 rounded-xl text-xs font-bold transition ${active ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'bg-slate-900 text-slate-400 hover:text-white'}`;
+        }
+      });
+    }
+
+    // ==================== VIEW 3: SUBJECT SUMMARY RENDER ====================
+    function getSubjectSummaryRows(cls, sub, monthFilter) {
+      const students = state.students
+        .filter(s => s.class === cls && (!s.subjects || s.subjects.includes(sub)))
+        .sort((a, b) => a.no - b.no);
+
+      return students.map(stu => {
+        let present = 0;
+        let absent = 0;
+        Object.entries(state.attendance).forEach(([key, dayMap]) => {
+          const [kCls, kSub, kDate] = key.split('|');
+          if (kCls === cls && kSub === sub) {
+            const m = kDate.split('-')[1];
+            if (monthFilter === 'ALL' || m === monthFilter) {
+              if (dayMap[stu.id] === 'present') present++;
+              else if (dayMap[stu.id] === 'absent') absent++;
+            }
+          }
+        });
+        const total = present + absent;
+        const pct = total > 0 ? ((present / total) * 100).toFixed(1) : '0.0';
+        const pass = total === 0 || parseFloat(pct) >= 80;
+        return { ...stu, present, absent, total, pct, pass };
+      });
+    }
+
+    function renderSubjectSummaryView() {
       const cls = document.getElementById('sub-summary-class')?.value || state.classes[0];
-      const sub = document.getElementById('sub-summary-subject')?.value || '';
-      const monthFilter = document.getElementById('sub-summary-month')?.value || 'ALL';
+      const sub = document.getElementById('sub-summary-subject')?.value || getSubjectsForClass(cls)[0];
+      const month = document.getElementById('sub-summary-month')?.value || 'ALL';
+
+      const rows = getSubjectSummaryRows(cls, sub, month);
       const tbody = document.getElementById('sub-summary-tbody');
 
-      const students = state.students
-        .filter(s => s.className === cls && isStudentEnrolledInSubject(s, sub))
-        .sort((a, b) => a.no - b.no);
-      if (students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">ไม่พบรายชื่อนักเรียนที่เรียนวิชา ${sub} ในห้อง ${cls}</td></tr>`;
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">ไม่พบข้อมูลนักเรียนในวิชานี้</td></tr>`;
         return;
       }
 
-      tbody.innerHTML = students.map(stu => {
-        let p = 0, a = 0;
-        Object.entries(state.attendance).forEach(([dateKey, subjectsObj]) => {
-          if (monthFilter !== 'ALL' && dateKey.split('-')[1] !== monthFilter) return;
-          const status = subjectsObj?.[sub]?.[stu.id];
-          if (status === 'P') p++;
-          else if (status === 'A') a++;
-        });
-        const total = p + a;
-        const pct = total > 0 ? ((p / total) * 100).toFixed(1) : '0.0';
-        const isRisk = total > 0 && (a / total) > 0.2;
-
-        return `
-          <tr class="hover:bg-slate-700/30">
-            <td class="px-4 py-3 text-center font-semibold text-slate-300">${stu.no}</td>
-            <td class="px-4 py-3 font-medium text-white">${stu.name}</td>
-            <td class="px-4 py-3 text-center">${stu.gender === 'M' ? '<span class="text-[#60a5fa] font-bold">♂ ชาย</span>' : '<span class="text-[#f472b6] font-bold">♀ หญิง</span>'}</td>
-            <td class="px-4 py-3 text-center font-bold text-emerald-400">${p}</td>
-            <td class="px-4 py-3 text-center font-bold text-rose-400">${a}</td>
-            <td class="px-4 py-3 text-center font-bold ${isRisk ? 'text-rose-400' : 'text-slate-200'}">${pct}%</td>
-            <td class="px-4 py-3 text-center">
-              ${isRisk
-                ? '<span class="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 text-xs font-semibold">เสี่ยงขาดเกิน 20%</span>'
-                : '<span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold">ปกติ</span>'}
-            </td>
-          </tr>`;
-      }).join('');
+      tbody.innerHTML = rows.map(r => `
+        <tr class="hover:bg-slate-700/30">
+          <td class="px-4 py-3 text-center font-bold text-slate-300">${r.no}</td>
+          <td class="px-4 py-3 font-medium text-white">${r.name}</td>
+          <td class="px-4 py-3 text-center">${renderGenderBadge(r.gender)}</td>
+          <td class="px-4 py-3 text-center font-bold text-emerald-400">${r.present}</td>
+          <td class="px-4 py-3 text-center font-bold text-rose-400">${r.absent}</td>
+          <td class="px-4 py-3 text-center font-bold ${r.pass ? 'text-sky-400' : 'text-rose-400'}">${r.pct}%</td>
+          <td class="px-4 py-3 text-center">
+            ${r.total === 0
+              ? '<span class="px-2.5 py-1 rounded-full text-xs bg-slate-700 text-slate-300">รอข้อมูล</span>'
+              : r.pass
+                ? '<span class="px-2.5 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-300 font-semibold">ปกติ</span>'
+                : '<span class="px-2.5 py-1 rounded-full text-xs bg-rose-500/20 text-rose-300 font-semibold">เสี่ยง (ต่ำกว่า 80%)</span>'}
+          </td>
+        </tr>
+      `).join('');
     }
 
-    // 4. Individual Monthly Matrix
-    function renderIndividualSummary() {
+    // ==================== VIEW 4: INDIVIDUAL MONTHLY MATRIX ====================
+    function getIndividualMatrixData(cls, sub, month) {
+      const students = state.students
+        .filter(s => s.class === cls && (!s.subjects || s.subjects.includes(sub)))
+        .sort((a, b) => a.no - b.no);
+
+      const activeDates = [];
+      Object.keys(state.attendance).sort().forEach(key => {
+        const [kCls, kSub, kDate] = key.split('|');
+        if (kCls === cls && kSub === sub && kDate.split('-')[1] === month) {
+          activeDates.push(kDate);
+        }
+      });
+
+      let totalPresent = 0;
+      let totalAbsent = 0;
+
+      const matrixRows = students.map(stu => {
+        let p = 0;
+        let a = 0;
+        const cells = activeDates.map(dt => {
+          const st = state.attendance[`${cls}|${sub}|${dt}`]?.[stu.id] || '';
+          if (st === 'present') { p++; totalPresent++; }
+          else if (st === 'absent') { a++; totalAbsent++; }
+          return st;
+        });
+        return { ...stu, cells, present: p, absent: a };
+      });
+
+      return { activeDates, matrixRows, totalPresent, totalAbsent };
+    }
+
+    function renderIndividualSummaryView() {
       const cls = document.getElementById('ind-summary-class')?.value || state.classes[0];
-      const sub = document.getElementById('ind-summary-subject')?.value || '';
+      const sub = document.getElementById('ind-summary-subject')?.value || getSubjectsForClass(cls)[0];
       const month = document.getElementById('ind-summary-month')?.value || '11';
 
-      document.getElementById('ind-stat-subject').textContent = `${sub} (${THAI_MONTHS[month]})`;
+      const { activeDates, matrixRows, totalPresent, totalAbsent } = getIndividualMatrixData(cls, sub, month);
 
-      const students = state.students
-        .filter(s => s.className === cls && isStudentEnrolledInSubject(s, sub))
-        .sort((a, b) => a.no - b.no);
-      const matchingDates = Object.keys(state.attendance)
-        .filter(d => d.split('-')[1] === month && state.attendance[d]?.[sub])
-        .sort();
+      document.getElementById('ind-stat-subject').textContent = `${sub} (${cls})`;
+      document.getElementById('ind-stat-present').textContent = `${totalPresent} ครั้ง`;
+      document.getElementById('ind-stat-absent').textContent = `${totalAbsent} ครั้ง`;
 
       const thead = document.getElementById('ind-matrix-thead');
       const tbody = document.getElementById('ind-matrix-tbody');
 
-      if (students.length === 0) {
-        thead.innerHTML = '';
-        tbody.innerHTML = `<tr><td class="px-4 py-8 text-center text-slate-400">ไม่พบรายชื่อนักเรียนที่เรียนวิชา ${sub} ในห้อง ${cls}</td></tr>`;
-        document.getElementById('ind-stat-present').textContent = '0 ครั้ง';
-        document.getElementById('ind-stat-absent').textContent = '0 ครั้ง';
+      const dateHeaders = activeDates.map(dt => `<th class="px-2.5 py-3 text-center min-w-[44px]">${parseInt(dt.split('-')[2], 10)}</th>`).join('');
+      thead.innerHTML = `
+        <tr>
+          <th class="px-3 py-3 text-center sticky left-0 bg-slate-900 z-10 w-12">เลขที่</th>
+          <th class="px-3 py-3 sticky left-12 bg-slate-900 z-10 min-w-[160px]">ชื่อ - นามสกุล</th>
+          ${dateHeaders}
+          <th class="px-3 py-3 text-center text-emerald-400">มา</th>
+          <th class="px-3 py-3 text-center text-rose-400">ขาด</th>
+        </tr>
+      `;
+
+      if (matrixRows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${activeDates.length + 4}" class="px-4 py-8 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในวิชานี้</td></tr>`;
         return;
       }
 
-      thead.innerHTML = `
-        <tr>
-          <th class="px-3 py-3 text-center w-12 sticky left-0 bg-slate-900 z-10">เลขที่</th>
-          <th class="px-3 py-3 min-w-[170px] sticky left-12 bg-slate-900 z-10">ชื่อ - นามสกุล</th>
-          ${matchingDates.map(d => `<th class="px-2.5 py-3 text-center whitespace-nowrap">${d.split('-')[2]}/${month}</th>`).join('')}
-          <th class="px-3 py-3 text-center text-emerald-400">มา</th>
-          <th class="px-3 py-3 text-center text-rose-400">ขาด</th>
-        </tr>`;
-
-      let sumP = 0, sumA = 0;
-
-      tbody.innerHTML = students.map(stu => {
-        let p = 0, a = 0;
-        const cells = matchingDates.map(d => {
-          const st = state.attendance[d]?.[sub]?.[stu.id];
-          if (st === 'P') { p++; sumP++; return `<td class="px-2.5 py-2.5 text-center font-bold text-emerald-400 bg-emerald-500/5">มา</td>`; }
-          if (st === 'A') { a++; sumA++; return `<td class="px-2.5 py-2.5 text-center font-bold text-rose-400 bg-rose-500/10">ขาด</td>`; }
+      tbody.innerHTML = matrixRows.map(r => {
+        const dayCells = r.cells.map(st => {
+          if (st === 'present') return `<td class="px-2.5 py-2.5 text-center text-emerald-400 font-bold">✓</td>`;
+          if (st === 'absent') return `<td class="px-2.5 py-2.5 text-center text-rose-400 font-bold">✗</td>`;
           return `<td class="px-2.5 py-2.5 text-center text-slate-600">-</td>`;
         }).join('');
-
         return `
           <tr class="hover:bg-slate-700/30">
-            <td class="px-3 py-2.5 text-center font-semibold sticky left-0 bg-slate-800">${stu.no}</td>
-            <td class="px-3 py-2.5 font-medium text-white sticky left-12 bg-slate-800 truncate max-w-[180px]">${stu.name}</td>
-            ${cells}
-            <td class="px-3 py-2.5 text-center font-bold text-emerald-400">${p}</td>
-            <td class="px-3 py-2.5 text-center font-bold text-rose-400">${a}</td>
-          </tr>`;
+            <td class="px-3 py-2.5 text-center font-bold sticky left-0 bg-slate-800">${r.no}</td>
+            <td class="px-3 py-2.5 font-medium text-white sticky left-12 bg-slate-800 whitespace-nowrap">${r.name}</td>
+            ${dayCells}
+            <td class="px-3 py-2.5 text-center font-bold text-emerald-400">${r.present}</td>
+            <td class="px-3 py-2.5 text-center font-bold text-rose-400">${r.absent}</td>
+          </tr>
+        `;
       }).join('');
-
-      document.getElementById('ind-stat-present').textContent = `${sumP} ครั้ง`;
-      document.getElementById('ind-stat-absent').textContent = `${sumA} ครั้ง`;
     }
 
-    // 5. Alerts Calculation & Render
-    function computeAlerts() {
+    // ==================== VIEW 5: RISK ALERTS ====================
+    function calculateRiskAlerts() {
       const alerts = [];
       state.students.forEach(stu => {
-        const subjects = Array.isArray(stu.subjects) ? stu.subjects : getSubjectsForClass(stu.className);
+        const subjects = Array.isArray(stu.subjects) ? stu.subjects : getSubjectsForClass(stu.class);
         subjects.forEach(sub => {
-          const dates = Object.keys(state.attendance).sort();
-          let p = 0, a = 0, maxStreak = 0, curStreak = 0;
-          dates.forEach(d => {
-            const st = state.attendance[d]?.[sub]?.[stu.id];
-            if (st === 'P') { p++; curStreak = 0; }
-            else if (st === 'A') { a++; curStreak++; if (curStreak > maxStreak) maxStreak = curStreak; }
+          const matchingKeys = Object.keys(state.attendance)
+            .filter(k => k.startsWith(`${stu.class}|${sub}|`))
+            .sort();
+
+          let present = 0;
+          let absent = 0;
+          let maxStreak = 0;
+          let currentStreak = 0;
+
+          matchingKeys.forEach(k => {
+            const status = state.attendance[k]?.[stu.id];
+            if (status === 'absent') {
+              absent++;
+              currentStreak++;
+              if (currentStreak > maxStreak) maxStreak = currentStreak;
+            } else if (status === 'present') {
+              present++;
+              currentStreak = 0;
+            }
           });
-          const total = p + a;
+
+          const total = present + absent;
           if (total === 0) return;
-          const absentPct = (a / total) * 100;
-          const hasStreak = maxStreak > 3;
+          const absentPct = (absent / total) * 100;
+          const hasStreak = maxStreak >= 3;
           const hasOver20 = absentPct > 20;
+
           if (hasStreak || hasOver20) {
             alerts.push({
               student: stu,
               subject: sub,
-              present: p,
-              absent: a,
+              present,
+              absent,
+              total,
               absentPct: absentPct.toFixed(1),
               maxStreak,
               hasStreak,
@@ -1652,8 +1834,9 @@
     }
 
     function updateAlertBadge() {
-      const count = computeAlerts().length;
+      const count = calculateRiskAlerts().length;
       const badge = document.getElementById('sidebar-alert-badge');
+      if (!badge) return;
       if (count > 0) {
         badge.textContent = count;
         badge.classList.remove('hidden');
@@ -1663,491 +1846,608 @@
     }
 
     function renderAlertsView() {
-      const all = computeAlerts();
-      const filtered = all.filter(item => {
-        if (state.alertFilter === 'streak') return item.hasStreak;
-        if (state.alertFilter === 'over20') return item.hasOver20;
-        return true;
-      });
+      let alerts = calculateRiskAlerts();
+      if (state.alertFilter === 'streak') alerts = alerts.filter(a => a.hasStreak);
+      else if (state.alertFilter === 'over20') alerts = alerts.filter(a => a.hasOver20);
 
       const container = document.getElementById('alerts-list-container');
-      if (filtered.length === 0) {
-        container.innerHTML = `<div class="col-span-full bg-slate-800 border border-slate-700 rounded-2xl p-8 text-center text-slate-400 text-sm">ไม่พบรายการแจ้งเตือนในหมวดหมู่นี้</div>`;
+      if (alerts.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full bg-slate-800 border border-slate-700 rounded-2xl p-10 text-center space-y-2">
+            <i class="fa-solid fa-circle-check text-3xl text-emerald-400"></i>
+            <p class="text-base font-bold text-white">ไม่พบนักเรียนกลุ่มเสี่ยงในเงื่อนไขนี้</p>
+            <p class="text-xs text-slate-400">นักเรียนทุกคนมีเวลาเรียนอยู่ในเกณฑ์ปกติ</p>
+          </div>
+        `;
         return;
       }
 
-      container.innerHTML = filtered.map(item => `
-        <div class="bg-slate-800 border border-rose-500/40 rounded-2xl p-5 flex items-start justify-between gap-4">
-          <div class="space-y-1.5">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0.5 rounded-lg bg-slate-900 text-xs font-bold text-indigo-300">${item.student.className} เลขที่ ${item.student.no}</span>
-              <span class="text-xs font-semibold text-sky-400">วิชา ${item.subject}</span>
+      container.innerHTML = alerts.map(a => `
+        <div class="bg-slate-800 border border-rose-500/40 rounded-2xl p-5 space-y-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="text-xs font-bold text-indigo-400">ห้อง ${a.student.class} • เลขที่ ${a.student.no}</span>
+              <h4 class="text-base font-bold text-white mt-0.5">${a.student.name}</h4>
+              <p class="text-xs text-sky-400 font-semibold mt-0.5">วิชา: ${a.subject}</p>
             </div>
-            <h4 class="text-base font-bold text-white">${item.student.name}</h4>
-            <div class="flex flex-wrap gap-2 pt-1">
-              ${item.hasStreak ? `<span class="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold">ขาดติดต่อกัน ${item.maxStreak} ครั้ง</span>` : ''}
-              ${item.hasOver20 ? `<span class="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-xs font-semibold">ขาดเรียน ${item.absentPct}% (${item.absent} ครั้ง)</span>` : ''}
-            </div>
+            ${renderGenderBadge(a.student.gender)}
           </div>
-          <i class="fa-solid fa-triangle-exclamation text-rose-400 text-xl"></i>
-        </div>`).join('');
+          <div class="flex flex-wrap gap-2">
+            ${a.hasStreak ? `<span class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 text-xs font-bold">ขาดติดต่อกัน ${a.maxStreak} ครั้ง</span>` : ''}
+            ${a.hasOver20 ? `<span class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-bold">ขาดเรียน ${a.absentPct}% (${a.absent}/${a.total} ครั้ง)</span>` : ''}
+          </div>
+        </div>
+      `).join('');
     }
 
-    // 6A. Daily Savings Render
+    // ==================== VIEW 6: SAVINGS SYSTEM ====================
+    let draftSavings = {};
+
+    function renderSavingsView() {
+      const isDaily = state.savingsTab === 'daily';
+      document.getElementById('savings-daily-panel').classList.toggle('hidden', !isDaily);
+      document.getElementById('savings-monthly-panel').classList.toggle('hidden', isDaily);
+
+      document.getElementById('tab-savings-daily-btn').className = isDaily
+        ? 'px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs sm:text-sm font-semibold transition'
+        : 'px-4 py-2 rounded-lg text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition';
+
+      document.getElementById('tab-savings-monthly-btn').className = !isDaily
+        ? 'px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs sm:text-sm font-semibold transition'
+        : 'px-4 py-2 rounded-lg text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition';
+
+      if (isDaily) renderSavingsDaily();
+      else renderSavingsMonthlyMatrix();
+    }
+
     function renderSavingsDaily() {
       const cls = document.getElementById('savings-daily-class')?.value || state.classes[0];
       const dateVal = document.getElementById('savings-daily-date')?.value || getTodayISO();
-      const monthPrefix = dateVal.slice(0, 7);
+      const monthStr = dateVal.split('-')[1];
 
-      const students = state.students.filter(s => s.className === cls).sort((a, b) => a.no - b.no);
+      const students = state.students.filter(s => s.class === cls).sort((a, b) => a.no - b.no);
 
-      // Compute Monthly Top 3 Crowns
-      const totals = students.map(stu => {
+      // Calculate monthly totals for Top 3 Crowns
+      const monthlyTotals = students.map(stu => {
         let sum = 0;
-        Object.entries(state.savings).forEach(([d, rec]) => {
-          if (d.startsWith(monthPrefix) && typeof rec[stu.id] === 'number') {
-            sum += rec[stu.id];
+        Object.entries(state.savings).forEach(([key, dayMap]) => {
+          const [kCls, kDate] = key.split('|');
+          if (kCls === cls && kDate.split('-')[1] === monthStr) {
+            sum += Number(dayMap[stu.id] || 0);
           }
         });
-        return { stu, sum };
-      }).filter(x => x.sum > 0).sort((a, b) => b.sum - a.sum).slice(0, 3);
+        return { ...stu, totalMonth: sum };
+      }).sort((a, b) => b.totalMonth - a.totalMonth);
 
-      const top3Container = document.getElementById('savings-top3-cards');
-      const crowns = ['👑 อันดับ 1', '🥈 อันดับ 2', '🥉 อันดับ 3'];
-      if (totals.length === 0) {
-        top3Container.innerHTML = `<div class="col-span-full text-xs text-slate-400">ยังไม่มีข้อมูลยอดฝากเงินในเดือนนี้</div>`;
+      const top3 = monthlyTotals.slice(0, 3).filter(x => x.totalMonth > 0);
+      const top3El = document.getElementById('savings-top3-cards');
+      if (top3.length === 0) {
+        top3El.innerHTML = `<p class="col-span-full text-xs text-slate-400">ยังไม่มีข้อมูลยอดฝากในเดือนนี้</p>`;
       } else {
-        top3Container.innerHTML = totals.map((item, idx) => `
-          <div class="bg-slate-900/80 border border-amber-500/30 rounded-xl p-3 flex items-center justify-between">
-            <div class="truncate">
-              <span class="text-xs font-bold text-amber-400 block">${crowns[idx]}</span>
-              <span class="text-sm font-semibold text-white truncate block">${item.stu.name}</span>
+        const medals = ['🥇 อันดับ 1', '🥈 อันดับ 2', '🥉 อันดับ 3'];
+        top3El.innerHTML = top3.map((item, idx) => `
+          <div class="bg-slate-900/80 border border-amber-500/30 rounded-xl p-3.5 flex items-center justify-between">
+            <div class="min-w-0">
+              <span class="text-[11px] font-bold text-amber-400">${medals[idx]}</span>
+              <p class="text-sm font-bold text-white truncate">${item.name}</p>
             </div>
-            <span class="text-base font-bold text-emerald-400 shrink-0">${item.sum.toLocaleString()} ฿</span>
-          </div>`).join('');
+            <span class="text-base font-bold text-emerald-400 shrink-0 ml-2">${item.totalMonth.toLocaleString()} ฿</span>
+          </div>
+        `).join('');
       }
 
-      // Render Student Rows
+      // Daily deposit list
+      const existingDay = state.savings[`${cls}|${dateVal}`] || {};
+      students.forEach(s => {
+        if (draftSavings[s.id] === undefined) {
+          draftSavings[s.id] = Number(existingDay[s.id] || 0);
+        }
+      });
+
       const tbody = document.getElementById('savings-daily-tbody');
       if (students.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในห้อง ${cls}</td></tr>`;
         return;
       }
 
-      const dayRec = state.savings?.[dateVal] || {};
       tbody.innerHTML = students.map(stu => {
-        const val = dayRec[stu.id];
-        let badge = `<span class="text-xs text-slate-500">ยังไม่บันทึก</span>`;
-        if (val === 'absent') badge = `<span class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 font-bold text-xs">ขาด (ข)</span>`;
-        else if (val === 0) badge = `<span class="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 font-semibold text-xs">ไม่ฝาก (0 ฿)</span>`;
-        else if (typeof val === 'number' && val > 0) badge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-xs">+${val.toLocaleString()} บาท</span>`;
-
+        const amt = Number(draftSavings[stu.id] || 0);
         return `
-          <tr class="hover:bg-slate-700/30" data-stu-id="${stu.id}" data-val="${val !== undefined ? val : ''}">
-            <td class="px-4 py-3 text-center font-semibold text-slate-300">${stu.no}</td>
-            <td class="px-4 py-3 font-medium text-white">${stu.name}</td>
-            <td class="px-4 py-3 text-center sav-status-cell">${badge}</td>
-            <td class="px-4 py-3 text-right">
-              <div class="inline-flex flex-wrap justify-end gap-1.5">
-                <button type="button" class="btn-sav-numpad px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">ใส่จำนวนเงิน</button>
-                <button type="button" class="btn-sav-zero px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold">ไม่ฝาก</button>
-                <button type="button" class="btn-sav-absent px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-semibold">ขาด</button>
-              </div>
+          <tr class="hover:bg-slate-700/30">
+            <td class="px-4 py-3 text-center font-bold text-slate-300">${stu.no}</td>
+            <td class="px-4 py-3">
+              <p class="font-medium text-white">${stu.name}</p>
+              <div class="mt-0.5">${renderGenderBadge(stu.gender)}</div>
             </td>
-          </tr>`;
+            <td class="px-4 py-3 text-center">
+              ${amt > 0
+                ? `<span class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-xs">ฝาก ${amt.toLocaleString()} บาท</span>`
+                : `<span class="px-3 py-1 rounded-full bg-slate-700 text-slate-400 text-xs">ไม่ฝาก</span>`}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <button type="button" data-stu-id="${stu.id}" data-stu-name="${stu.name}" class="btn-open-numpad px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+                <i class="fa-solid fa-calculator mr-1"></i> ระบุยอดเงิน
+              </button>
+            </td>
+          </tr>
+        `;
       }).join('');
 
-      tbody.querySelectorAll('.btn-sav-numpad').forEach(btn => {
+      tbody.querySelectorAll('.btn-open-numpad').forEach(btn => {
         btn.addEventListener('click', () => {
-          const row = btn.closest('tr');
-          state.activeNumpadStudentId = row.dataset.stuId;
-          const stu = state.students.find(s => s.id === state.activeNumpadStudentId);
-          document.getElementById('numpad-student-name').textContent = stu?.name || '';
-          const cur = row.dataset.val;
-          state.numpadVal = (!isNaN(Number(cur)) && cur !== '') ? String(cur) : '0';
+          state.activeNumpadStudentId = btn.dataset.stuId;
+          state.numpadVal = String(draftSavings[state.activeNumpadStudentId] || 0);
+          document.getElementById('numpad-student-name').textContent = btn.dataset.stuName;
           document.getElementById('numpad-display').textContent = state.numpadVal;
           document.getElementById('modal-numpad').classList.remove('hidden');
         });
       });
-
-      tbody.querySelectorAll('.btn-sav-zero').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const row = btn.closest('tr');
-          row.dataset.val = '0';
-          row.querySelector('.sav-status-cell').innerHTML = `<span class="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 font-semibold text-xs">ไม่ฝาก (0 ฿)</span>`;
-        });
-      });
-
-      tbody.querySelectorAll('.btn-sav-absent').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const row = btn.closest('tr');
-          row.dataset.val = 'absent';
-          row.querySelector('.sav-status-cell').innerHTML = `<span class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 font-bold text-xs">ขาด (ข)</span>`;
-        });
-      });
     }
 
-    // 6B. Monthly Savings Matrix Render
+    function getSavingsMatrixData(cls, month, mode) {
+      const students = state.students.filter(s => s.class === cls).sort((a, b) => a.no - b.no);
+      let dayColumns = [];
+
+      if (mode === 'all') {
+        for (let d = 1; d <= 31; d++) {
+          dayColumns.push(String(d).padStart(2, '0'));
+        }
+      } else {
+        const activeDays = new Set();
+        Object.keys(state.savings).forEach(key => {
+          const [kCls, kDate] = key.split('|');
+          if (kCls === cls && kDate.split('-')[1] === month) {
+            activeDays.add(kDate.split('-')[2]);
+          }
+        });
+        dayColumns = Array.from(activeDays).sort();
+      }
+
+      const dayTotals = {};
+      dayColumns.forEach(d => dayTotals[d] = 0);
+      let grandTotal = 0;
+
+      const rows = students.map(stu => {
+        let rowSum = 0;
+        const cells = dayColumns.map(dd => {
+          let val = 0;
+          Object.entries(state.savings).forEach(([key, dayMap]) => {
+            const [kCls, kDate] = key.split('|');
+            if (kCls === cls && kDate.split('-')[1] === month && kDate.split('-')[2] === dd) {
+              val = Number(dayMap[stu.id] || 0);
+            }
+          });
+          rowSum += val;
+          dayTotals[dd] += val;
+          grandTotal += val;
+          return val;
+        });
+        return { ...stu, cells, rowSum };
+      });
+
+      return { dayColumns, rows, dayTotals, grandTotal };
+    }
+
     function renderSavingsMonthlyMatrix() {
       const cls = document.getElementById('savings-monthly-class')?.value || state.classes[0];
       const month = document.getElementById('savings-monthly-month')?.value || '11';
       const mode = document.getElementById('savings-monthly-mode')?.value || 'active';
 
-      const students = state.students.filter(s => s.className === cls).sort((a, b) => a.no - b.no);
+      const { dayColumns, rows, dayTotals, grandTotal } = getSavingsMatrixData(cls, month, mode);
       const thead = document.getElementById('savings-matrix-thead');
       const tbody = document.getElementById('savings-matrix-tbody');
       const tfoot = document.getElementById('savings-matrix-tfoot');
 
-      if (students.length === 0) {
-        thead.innerHTML = '';
-        tbody.innerHTML = `<tr><td class="px-4 py-8 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในห้อง ${cls}</td></tr>`;
+      thead.innerHTML = `
+        <tr>
+          <th class="px-3 py-3 text-center sticky left-0 bg-slate-900 z-10 w-12">เลขที่</th>
+          <th class="px-3 py-3 sticky left-12 bg-slate-900 z-10 min-w-[160px]">ชื่อ - นามสกุล</th>
+          ${dayColumns.map(d => `<th class="px-2.5 py-3 text-center min-w-[48px]">${parseInt(d, 10)}</th>`).join('')}
+          <th class="px-3 py-3 text-right text-emerald-400 min-w-[85px]">รวม (บาท)</th>
+        </tr>
+      `;
+
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${dayColumns.length + 3}" class="px-4 py-8 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในห้อง ${cls}</td></tr>`;
         tfoot.innerHTML = '';
         return;
       }
 
-      let dateCols = [];
-      if (mode === 'all') {
-        for (let d = 1; d <= 31; d++) {
-          dateCols.push(String(d).padStart(2, '0'));
-        }
-      } else {
-        const activeDays = new Set();
-        Object.keys(state.savings).forEach(dKey => {
-          if (dKey.split('-')[1] === month) {
-            const hasClassData = students.some(s => state.savings[dKey]?.[s.id] !== undefined);
-            if (hasClassData) activeDays.add(dKey.split('-')[2]);
-          }
-        });
-        dateCols = Array.from(activeDays).sort();
-      }
-
-      thead.innerHTML = `
-        <tr>
-          <th class="px-3 py-3 text-center w-12 sticky left-0 bg-slate-900 z-10">เลขที่</th>
-          <th class="px-3 py-3 min-w-[170px] sticky left-12 bg-slate-900 z-10">ชื่อ - นามสกุล</th>
-          ${dateCols.map(day => `<th class="px-2.5 py-3 text-center">${day}/${month}</th>`).join('')}
-          <th class="px-3 py-3 text-right text-emerald-400">รวม (บาท)</th>
-        </tr>`;
-
-      const colTotals = new Array(dateCols.length).fill(0);
-      let grandTotal = 0;
-
-      tbody.innerHTML = students.map(stu => {
-        let rowSum = 0;
-        const cells = dateCols.map((day, idx) => {
-          const matchingKey = Object.keys(state.savings).find(k => k.split('-')[1] === month && k.split('-')[2] === day);
-          const val = matchingKey ? state.savings[matchingKey]?.[stu.id] : undefined;
-          if (val === 'absent') {
-            return `<td class="px-2.5 py-2.5 text-center font-bold text-rose-400 bg-rose-500/10" title="ขาดเรียน">ข</td>`;
-          }
-          if (typeof val === 'number' && val > 0) {
-            rowSum += val;
-            colTotals[idx] += val;
-            grandTotal += val;
-            return `<td class="px-2.5 py-2.5 text-center font-bold text-emerald-400">${val}</td>`;
-          }
-          if (val === 0) {
-            return `<td class="px-2.5 py-2.5 text-center text-slate-400">0</td>`;
-          }
-          return `<td class="px-2.5 py-2.5 text-center text-slate-600">-</td>`;
-        }).join('');
-
-        return `
-          <tr class="hover:bg-slate-700/30">
-            <td class="px-3 py-2.5 text-center font-semibold sticky left-0 bg-slate-800">${stu.no}</td>
-            <td class="px-3 py-2.5 font-medium text-white sticky left-12 bg-slate-800 truncate max-w-[180px]">${stu.name}</td>
-            ${cells}
-            <td class="px-3 py-2.5 text-right font-bold text-emerald-400">${rowSum.toLocaleString()}</td>
-          </tr>`;
-      }).join('');
+      tbody.innerHTML = rows.map(r => `
+        <tr class="hover:bg-slate-700/30">
+          <td class="px-3 py-2.5 text-center font-bold sticky left-0 bg-slate-800">${r.no}</td>
+          <td class="px-3 py-2.5 font-medium text-white sticky left-12 bg-slate-800 whitespace-nowrap">${r.name}</td>
+          ${r.cells.map(v => `<td class="px-2.5 py-2.5 text-center ${v > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-600'}">${v > 0 ? v : '-'}</td>`).join('')}
+          <td class="px-3 py-2.5 text-right font-bold text-emerald-400">${r.rowSum.toLocaleString()}</td>
+        </tr>
+      `).join('');
 
       tfoot.innerHTML = `
         <tr>
-          <td colspan="2" class="px-3 py-3 text-right sticky left-0 bg-slate-900">รวมยอดฝากรายวัน</td>
-          ${colTotals.map(t => `<td class="px-2.5 py-3 text-center text-emerald-300">${t > 0 ? t.toLocaleString() : '-'}</td>`).join('')}
-          <td class="px-3 py-3 text-right text-emerald-400 text-sm">${grandTotal.toLocaleString()} ฿</td>
-        </tr>`;
+          <td colspan="2" class="px-3 py-3 text-right sticky left-0 bg-slate-900">รวมยอดรายวัน</td>
+          ${dayColumns.map(d => `<td class="px-2.5 py-3 text-center text-sky-400">${dayTotals[d] > 0 ? dayTotals[d].toLocaleString() : '-'}</td>`).join('')}
+          <td class="px-3 py-3 text-right text-amber-400 text-sm">${grandTotal.toLocaleString()} ฿</td>
+        </tr>
+      `;
     }
 
-    // 7. Admin Render
-    function renderAdminView() {
-      // Classroom chips
-      const chipsEl = document.getElementById('admin-class-chips');
-      chipsEl.innerHTML = state.classes.map(c => `
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-200">
-          ${c}
-          <button type="button" data-del-cls="${c}" class="btn-del-cls text-slate-500 hover:text-rose-400"><i class="fa-solid fa-xmark"></i></button>
-        </span>`).join('');
+    // ==================== VIEW 7: ADMIN PANEL ====================
+    function switchAdminSubtab(subtabId) {
+      state.adminSubtab = subtabId;
+      document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`admin-subtab-${subtabId}`)?.classList.remove('hidden');
 
-      chipsEl.querySelectorAll('.btn-del-cls').forEach(btn => {
+      document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+        if (btn.dataset.adminSubtab === subtabId) {
+          btn.className = 'admin-tab-btn pb-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 whitespace-nowrap';
+        } else {
+          btn.className = 'admin-tab-btn pb-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white whitespace-nowrap';
+        }
+      });
+
+      renderAdminView();
+    }
+
+    function renderAdminView() {
+      switchAdminSubtabUI();
+      if (state.adminSubtab === 'classes') renderAdminClassesAndSubjects();
+      else if (state.adminSubtab === 'students') renderAdminStudentsTab();
+      else if (state.adminSubtab === 'promote') renderAdminPromoteTab();
+      else if (state.adminSubtab === 'purge') renderAdminPurgeTab();
+    }
+
+    function switchAdminSubtabUI() {
+      document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`admin-subtab-${state.adminSubtab}`)?.classList.remove('hidden');
+      document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+        btn.className = btn.dataset.adminSubtab === state.adminSubtab
+          ? 'admin-tab-btn pb-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 whitespace-nowrap'
+          : 'admin-tab-btn pb-3 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-white whitespace-nowrap';
+      });
+    }
+
+    function renderAdminClassesAndSubjects() {
+      // Class chips
+      const classChips = document.getElementById('admin-class-chips');
+      classChips.innerHTML = state.classes.map(c => `
+        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-white">
+          <span>${c}</span>
+          <button type="button" data-del-class="${c}" class="text-slate-400 hover:text-rose-400"><i class="fa-solid fa-xmark"></i></button>
+        </span>
+      `).join('');
+
+      classChips.querySelectorAll('[data-del-class]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const target = btn.dataset.delCls;
-          if (state.classes.length <= 1) return showToast('ต้องเหลือห้องเรียนอย่างน้อย 1 ห้อง', 'error');
+          const target = btn.dataset.delClass;
+          if (state.classes.length <= 1) {
+            showToast('ต้องมีห้องเรียนอย่างน้อย 1 ห้อง', 'error');
+            return;
+          }
           state.classes = state.classes.filter(c => c !== target);
-          delete state.subjectsByClass[target];
-          localStorage.setItem('kroek_classes', JSON.stringify(state.classes));
-          localStorage.setItem('kroek_subjects_by_class', JSON.stringify(state.subjectsByClass));
-          try {
-            await setDoc(doc(db, 'config', 'classrooms'), { list: state.classes });
-            await setDoc(doc(db, 'config', 'subjects'), { byClass: state.subjectsByClass });
-          } catch (e) {}
-          persistSessionAndReload(`ลบห้องเรียน ${target} เรียบร้อยแล้ว`);
+          delete state.subjectsByLevel[target];
+          await saveMetadataToCloud();
+          persistSessionAndReload(`ลบห้องเรียน ${target} แล้ว`);
         });
       });
 
-      // Subject chips for selected classroom
-      const subManageCls = document.getElementById('admin-subject-manage-class')?.value || state.classes[0];
-      const subChipsEl = document.getElementById('admin-subject-chips');
-      const classSubjects = getSubjectsForClass(subManageCls);
-      if (classSubjects.length === 0) {
-        subChipsEl.innerHTML = `<span class="text-xs text-slate-500">ยังไม่มีวิชาในห้อง ${subManageCls}</span>`;
-      } else {
-        subChipsEl.innerHTML = classSubjects.map(sub => `
-          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-sky-500/30 text-xs font-semibold text-sky-300">
-            ${sub}
-            <button type="button" data-del-sub="${sub}" class="btn-del-sub text-slate-500 hover:text-rose-400"><i class="fa-solid fa-xmark"></i></button>
-          </span>`).join('');
+      // Subject chips for selected class
+      const manageCls = document.getElementById('admin-subject-manage-class')?.value || state.classes[0];
+      const subjects = getSubjectsForClass(manageCls);
+      const subChips = document.getElementById('admin-subject-chips');
+      subChips.innerHTML = subjects.map(s => `
+        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-xs font-semibold text-sky-300">
+          <span>${s}</span>
+          <button type="button" data-del-sub="${s}" class="text-sky-400 hover:text-rose-400"><i class="fa-solid fa-xmark"></i></button>
+        </span>
+      `).join('');
 
-        subChipsEl.querySelectorAll('.btn-del-sub').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const targetSub = btn.dataset.delSub;
-            state.subjectsByClass[subManageCls] = getSubjectsForClass(subManageCls).filter(s => s !== targetSub);
-            localStorage.setItem('kroek_subjects_by_class', JSON.stringify(state.subjectsByClass));
-            try { await setDoc(doc(db, 'config', 'subjects'), { byClass: state.subjectsByClass }); } catch (e) {}
-            persistSessionAndReload(`ลบวิชา "${targetSub}" ออกจาก ${subManageCls} แล้ว`);
-          });
+      subChips.querySelectorAll('[data-del-sub]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const targetSub = btn.dataset.delSub;
+          state.subjectsByLevel[manageCls] = getSubjectsForClass(manageCls).filter(s => s !== targetSub);
+          await saveMetadataToCloud();
+          persistSessionAndReload(`ลบวิชา ${targetSub} ออกจากห้อง ${manageCls} แล้ว`);
         });
+      });
+
+      // Summary Table of All Subjects in Academic Year
+      document.getElementById('admin-summary-year-label').textContent = state.currentYear;
+      const subjectMap = {};
+      state.classes.forEach(cls => {
+        getSubjectsForClass(cls).forEach(sub => {
+          if (!subjectMap[sub]) subjectMap[sub] = new Set();
+          subjectMap[sub].add(cls);
+        });
+      });
+      state.students.forEach(stu => {
+        (stu.subjects || []).forEach(sub => {
+          if (!subjectMap[sub]) subjectMap[sub] = new Set();
+          subjectMap[sub].add(stu.class);
+        });
+      });
+
+      const sortedSubjects = Object.keys(subjectMap).sort((a, b) => a.localeCompare(b, 'th'));
+      document.getElementById('admin-total-subjects-badge').textContent = `${sortedSubjects.length} วิชา`;
+
+      const summaryTbody = document.getElementById('admin-subjects-summary-tbody');
+      if (sortedSubjects.length === 0) {
+        summaryTbody.innerHTML = `<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">ยังไม่มีรายวิชาในปีการศึกษานี้</td></tr>`;
+      } else {
+        summaryTbody.innerHTML = sortedSubjects.map((sub, idx) => {
+          const classesOffering = Array.from(subjectMap[sub]);
+          const enrolledCount = state.students.filter(s => (s.subjects || []).includes(sub)).length;
+          return `
+            <tr class="hover:bg-slate-700/30">
+              <td class="px-4 py-3 text-center font-bold text-slate-300">${idx + 1}</td>
+              <td class="px-4 py-3 font-semibold text-white">${sub}</td>
+              <td class="px-4 py-3">
+                <div class="flex flex-wrap gap-1.5">
+                  ${classesOffering.map(c => `<span class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-indigo-300">${c}</span>`).join('')}
+                </div>
+              </td>
+              <td class="px-4 py-3 text-center font-bold text-emerald-400">${enrolledCount} คน</td>
+            </tr>
+          `;
+        }).join('');
       }
+    }
 
-      // Render subject checkboxes for add student form
-      const addStuCls = document.getElementById('admin-student-class')?.value || state.classes[0];
-      renderSubjectCheckboxes('admin-student-subjects', addStuCls, null);
+    function renderSingleStudentSubjectCheckboxes() {
+      const cls = document.getElementById('admin-student-class')?.value || state.classes[0];
+      const subjects = getSubjectsForClass(cls);
+      const container = document.getElementById('admin-student-subjects');
+      container.innerHTML = subjects.map(s => `
+        <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 cursor-pointer hover:border-indigo-500">
+          <input type="checkbox" value="${s}" checked class="stu-sub-cb rounded text-indigo-500 focus:ring-0" />
+          <span>${s}</span>
+        </label>
+      `).join('');
+    }
 
-      // Students Grouped Tables in Admin (Sorted by Subject Name -> Class Level -> Student No)
+    function renderAdminStudentsTab() {
+      renderSingleStudentSubjectCheckboxes();
+
       const filterCls = document.getElementById('admin-filter-class')?.value || 'ALL';
-      const groupedContainer = document.getElementById('admin-students-grouped-container');
       const filteredStudents = filterCls === 'ALL'
         ? state.students
-        : state.students.filter(s => s.className === filterCls);
+        : state.students.filter(s => s.class === filterCls);
 
+      const container = document.getElementById('admin-students-grouped-container');
       if (filteredStudents.length === 0) {
-        groupedContainer.innerHTML = `<div class="py-8 text-center text-slate-400 text-xs">ยังไม่มีรายชื่อนักเรียน${filterCls === 'ALL' ? '' : `ในห้อง ${filterCls}`}</div>`;
-      } else {
-        // Group students by subject first, then by class level
-        const subjectGroups = {};
-        filteredStudents.forEach(stu => {
-          const enrolled = Array.isArray(stu.subjects) && stu.subjects.length > 0
-            ? stu.subjects
-            : getSubjectsForClass(stu.className);
-          enrolled.forEach(subName => {
-            if (!subjectGroups[subName]) subjectGroups[subName] = {};
-            if (!subjectGroups[subName][stu.className]) subjectGroups[subName][stu.className] = [];
-            subjectGroups[subName][stu.className].push(stu);
-          });
-        });
-
-        const sortedSubjectNames = Object.keys(subjectGroups).sort((a, b) => a.localeCompare(b, 'th'));
-
-        groupedContainer.innerHTML = sortedSubjectNames.map(subName => {
-          const classMap = subjectGroups[subName];
-          const sortedClasses = Object.keys(classMap).sort((a, b) => {
-            const idxA = state.classes.indexOf(a);
-            const idxB = state.classes.indexOf(b);
-            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-            return a.localeCompare(b, 'th');
-          });
-
-          const totalInSubject = sortedClasses.reduce((sum, c) => sum + classMap[c].length, 0);
-
-          const classSectionsHtml = sortedClasses.map(clsName => {
-            const stuList = classMap[clsName].sort((a, b) => a.no - b.no);
-            const rowsHtml = stuList.map(stu => `
-              <tr class="hover:bg-slate-700/30">
-                <td class="px-3 py-2 text-center"><input type="checkbox" value="${stu.id}" class="chk-admin-stu rounded" /></td>
-                <td class="px-3 py-2 text-center font-semibold text-slate-300">${stu.no}</td>
-                <td class="px-3 py-2 font-medium text-white">${stu.name}</td>
-                <td class="px-3 py-2 text-center">${stu.gender === 'M' ? '<span class="text-[#60a5fa] font-semibold">♂ ชาย</span>' : '<span class="text-[#f472b6] font-semibold">♀ หญิง</span>'}</td>
-                <td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-xs font-semibold">${stu.className}</span></td>
-                <td class="px-3 py-2 text-right space-x-2">
-                  <button type="button" data-id="${stu.id}" class="btn-edit-single-stu text-amber-400 hover:text-amber-300 text-xs" title="แก้ไข"><i class="fa-solid fa-pen-to-square"></i></button>
-                  <button type="button" data-id="${stu.id}" class="btn-del-single-stu text-rose-400 hover:text-rose-300 text-xs" title="ลบ"><i class="fa-solid fa-trash"></i></button>
-                </td>
-              </tr>`).join('');
-
-            return `
-              <div class="border-t border-slate-700/80">
-                <div class="bg-slate-800/90 px-4 py-2 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <input type="checkbox" class="chk-group-select-all rounded" title="เลือกทั้งหมดในกลุ่มนี้" />
-                    <span class="text-xs font-bold text-indigo-300"><i class="fa-solid fa-door-open mr-1"></i>ระดับชั้น ${clsName}</span>
-                  </div>
-                  <span class="text-[11px] text-slate-400 tabular-nums">${stuList.length} คน</span>
-                </div>
-                <div class="overflow-x-auto">
-                  <table class="w-full text-sm text-left">
-                    <thead class="bg-slate-900/70 text-[11px] text-slate-400 uppercase border-b border-slate-700/70">
-                      <tr>
-                        <th class="px-3 py-2 w-10 text-center">เลือก</th>
-                        <th class="px-3 py-2 w-16 text-center">เลขที่</th>
-                        <th class="px-3 py-2">ชื่อ - นามสกุล</th>
-                        <th class="px-3 py-2 text-center">เพศ</th>
-                        <th class="px-3 py-2 text-center">ระดับชั้น</th>
-                        <th class="px-3 py-2 text-right">จัดการ</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-700/50 tabular-nums">${rowsHtml}</tbody>
-                  </table>
-                </div>
-              </div>`;
-          }).join('');
-
-          return `
-            <div class="bg-slate-900/60 border border-sky-500/30 rounded-2xl overflow-hidden">
-              <div class="bg-sky-950/50 px-4 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs"><i class="fa-solid fa-book"></i></span>
-                  <h5 class="text-sm font-bold text-sky-300">วิชา ${subName}</h5>
-                </div>
-                <span class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-200 text-xs font-semibold tabular-nums">รวม ${totalInSubject} คน (${sortedClasses.length} ห้อง)</span>
-              </div>
-              ${classSectionsHtml}
-            </div>`;
-        }).join('');
-
-        groupedContainer.querySelectorAll('.chk-group-select-all').forEach(grpChk => {
-          grpChk.addEventListener('change', (e) => {
-            const section = grpChk.closest('div.border-t');
-            section.querySelectorAll('.chk-admin-stu').forEach(c => { c.checked = e.target.checked; });
-          });
-        });
-
-        groupedContainer.querySelectorAll('.btn-edit-single-stu').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const stu = state.students.find(s => s.id === btn.dataset.id);
-            if (!stu) return;
-            state.editingStudentId = stu.id;
-            document.getElementById('edit-stu-class').value = stu.className;
-            document.getElementById('edit-stu-no').value = stu.no;
-            document.getElementById('edit-stu-name').value = stu.name;
-            renderSubjectCheckboxes('edit-stu-subjects', stu.className, Array.isArray(stu.subjects) ? stu.subjects : null);
-            document.getElementById('modal-edit-student').classList.remove('hidden');
-          });
-        });
-
-        groupedContainer.querySelectorAll('.btn-del-single-stu').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            state.students = state.students.filter(s => s.id !== btn.dataset.id);
-            localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-            try { await setDoc(doc(db, 'years', `${state.currentYear}_students`), { list: state.students }); } catch (e) {}
-            persistSessionAndReload('ลบข้อมูลนักเรียนเรียบร้อยแล้ว');
-          });
-        });
+        container.innerHTML = `<div class="py-10 text-center text-slate-400 text-sm">ยังไม่มีรายชื่อนักเรียนในหมวดที่เลือก</div>`;
+        return;
       }
 
-      // Render Promote Table
-      renderPromoteTable();
+      // Group by Subject -> Class
+      const groupedBySubject = {};
+      filteredStudents.forEach(stu => {
+        const subs = Array.isArray(stu.subjects) && stu.subjects.length > 0 ? stu.subjects : ['ไม่ระบุวิชา'];
+        subs.forEach(sub => {
+          if (!groupedBySubject[sub]) groupedBySubject[sub] = {};
+          if (!groupedBySubject[sub][stu.class]) groupedBySubject[sub][stu.class] = [];
+          groupedBySubject[sub][stu.class].push(stu);
+        });
+      });
 
-      // Purge Old Year Dropdown
-      const purgeSel = document.getElementById('purge-old-year-select');
-      const curY = parseInt(state.currentYear, 10);
-      const oldYears = ['2567', '2568', '2569'].filter(y => parseInt(y, 10) < curY);
-      purgeSel.innerHTML = oldYears.length > 0
-        ? oldYears.map(y => `<option value="${y}">ปีการศึกษา ${y}</option>`).join('')
-        : `<option value="">ไม่มีปีการศึกษาที่เก่ากว่า ${state.currentYear}</option>`;
+      const sortedSubjects = Object.keys(groupedBySubject).sort((a, b) => a.localeCompare(b, 'th'));
+
+      container.innerHTML = sortedSubjects.map(sub => {
+        const classesInSub = Object.keys(groupedBySubject[sub]).sort((a, b) => {
+          const idxA = state.classes.indexOf(a);
+          const idxB = state.classes.indexOf(b);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          return a.localeCompare(b, 'th');
+        });
+
+        const classBlocksHtml = classesInSub.map(cls => {
+          const list = groupedBySubject[sub][cls].sort((a, b) => a.no - b.no);
+          return `
+            <div class="border border-slate-700/80 rounded-xl overflow-hidden">
+              <div class="bg-slate-900/70 px-3.5 py-2 flex items-center justify-between text-xs">
+                <span class="font-bold text-indigo-300"><i class="fa-solid fa-door-open mr-1.5"></i>ระดับชั้น ${cls} (${list.length} คน)</span>
+                <label class="inline-flex items-center gap-1.5 text-slate-400 cursor-pointer">
+                  <input type="checkbox" class="group-select-all rounded" />
+                  <span>เลือกทั้งห้อง</span>
+                </label>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                  <thead class="bg-slate-900/40 text-slate-400 border-b border-slate-700/60">
+                    <tr>
+                      <th class="px-3 py-2 text-center w-10">เลือก</th>
+                      <th class="px-3 py-2 text-center w-14">เลขที่</th>
+                      <th class="px-3 py-2">ชื่อ - นามสกุล</th>
+                      <th class="px-3 py-2 text-center">เพศ</th>
+                      <th class="px-3 py-2 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-700/50 tabular-nums">
+                    ${list.map(stu => `
+                      <tr class="hover:bg-slate-700/30">
+                        <td class="px-3 py-2 text-center"><input type="checkbox" value="${stu.id}" class="stu-del-cb rounded" /></td>
+                        <td class="px-3 py-2 text-center font-bold text-slate-300">${stu.no}</td>
+                        <td class="px-3 py-2 font-medium text-white">${stu.name}</td>
+                        <td class="px-3 py-2 text-center">${renderGenderBadge(stu.gender)}</td>
+                        <td class="px-3 py-2 text-right space-x-1.5">
+                          <button type="button" data-edit-id="${stu.id}" class="btn-edit-stu px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 hover:text-white transition"><i class="fa-solid fa-pen"></i></button>
+                          <button type="button" data-del-id="${stu.id}" class="btn-del-single-stu px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-rose-600 text-slate-200 hover:text-white transition"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="bg-slate-900/40 border border-slate-700 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <h5 class="text-sm font-bold text-sky-400"><i class="fa-solid fa-book mr-2"></i>วิชา: ${sub}</h5>
+              <span class="text-xs text-slate-400">${classesInSub.length} ห้องเรียน</span>
+            </div>
+            <div class="space-y-3">${classBlocksHtml}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Group select all checkboxes
+      container.querySelectorAll('.group-select-all').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const table = cb.closest('div.border').querySelector('table');
+          table.querySelectorAll('.stu-del-cb').forEach(item => item.checked = cb.checked);
+        });
+      });
+
+      // Single Delete
+      container.querySelectorAll('.btn-del-single-stu').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.delId;
+          state.students = state.students.filter(s => s.id !== id);
+          await saveStudentsToCloud();
+          persistSessionAndReload('ลบรายชื่อนักเรียนเรียบร้อยแล้ว');
+        });
+      });
+
+      // Edit Modal Trigger
+      container.querySelectorAll('.btn-edit-stu').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const stu = state.students.find(s => s.id === btn.dataset.editId);
+          if (!stu) return;
+          state.editingStudentId = stu.id;
+          document.getElementById('edit-stu-class').value = stu.class;
+          document.getElementById('edit-stu-no').value = stu.no;
+          document.getElementById('edit-stu-name').value = stu.name;
+          renderEditStudentSubjects(stu.class, stu.subjects || []);
+          document.getElementById('modal-edit-student').classList.remove('hidden');
+        });
+      });
+    }
+
+    function renderEditStudentSubjects(cls, selectedSubjects) {
+      const subjects = getSubjectsForClass(cls);
+      const container = document.getElementById('edit-stu-subjects');
+      container.innerHTML = subjects.map(s => `
+        <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 cursor-pointer">
+          <input type="checkbox" value="${s}" ${selectedSubjects.includes(s) ? 'checked' : ''} class="edit-stu-sub-cb rounded text-indigo-500" />
+          <span>${s}</span>
+        </label>
+      `).join('');
     }
 
     function getNextClass(cls) {
-      if (!cls || typeof cls !== 'string') return 'ป.1';
-      const match = cls.match(/^(ป|ม)\.(\d+)(.*)$/);
-      if (!match) return cls;
-      const level = match[1];
-      const num = parseInt(match[2], 10);
-      const suffix = match[3] || '';
-      if (level === 'ป' && num < 6) return `ป.${num + 1}${suffix}`;
-      if (level === 'ป' && num === 6) return `ม.1${suffix}`;
-      if (level === 'ม' && num < 3) return `ม.${num + 1}${suffix}`;
-      return 'จบการศึกษา';
+      if (!cls || typeof cls !== 'string') return 'ป.2';
+      const map = {
+        'ป.1': 'ป.2', 'ป.2': 'ป.3', 'ป.3': 'ป.4', 'ป.4': 'ป.5', 'ป.5': 'ป.6', 'ป.6': 'ม.1',
+        'ม.1': 'ม.2', 'ม.2': 'ม.3', 'ม.3': 'จบการศึกษา'
+      };
+      if (map[cls]) return map[cls];
+      const m = cls.match(/^(ป\.|ม\.)(\d+)(\/.*)?$/);
+      if (m) {
+        const prefix = m[1];
+        const grade = parseInt(m[2], 10);
+        const room = m[3] || '';
+        if (prefix === 'ป.' && grade < 6) return `ป.${grade + 1}${room}`;
+        if (prefix === 'ป.' && grade === 6) return `ม.1${room}`;
+        if (prefix === 'ม.' && grade < 3) return `ม.${grade + 1}${room}`;
+        if (prefix === 'ม.' && grade === 3) return 'จบการศึกษา';
+      }
+      return cls;
     }
 
-    function renderPromoteTable() {
+    function renderAdminPromoteTab() {
       const tbody = document.getElementById('promote-tbody');
       if (state.students.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">ยังไม่มีรายชื่อนักเรียนในปีการศึกษา ${state.currentYear}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">ไม่มีรายชื่อนักเรียนในปีการศึกษา ${state.currentYear}</td></tr>`;
         return;
       }
-      tbody.innerHTML = state.students.map(stu => {
-        const cls = stu.className || 'ป.1';
-        const nextCls = getNextClass(cls);
-        const isGrad = nextCls === 'จบการศึกษา';
+
+      const sorted = [...state.students].sort((a, b) => a.class.localeCompare(b.class, 'th') || a.no - b.no);
+      tbody.innerHTML = sorted.map(stu => {
+        const nextCls = getNextClass(stu.class);
         return `
-          <tr data-stu-id="${stu.id}">
-            <td class="px-4 py-2.5 text-center"><input type="checkbox" class="chk-promote rounded" ${!isGrad ? 'checked' : ''} /></td>
-            <td class="px-4 py-2.5 font-medium text-white">${stu.name || '-'}</td>
-            <td class="px-4 py-2.5 text-center">${cls}</td>
+          <tr>
+            <td class="px-4 py-2.5 text-center"><input type="checkbox" checked data-stu-id="${stu.id}" class="promote-cb rounded" /></td>
+            <td class="px-4 py-2.5 font-medium text-white">${stu.name}</td>
+            <td class="px-4 py-2.5 text-center font-bold text-slate-300">${stu.class}</td>
             <td class="px-4 py-2.5">
-              <select class="sel-promote-action bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white">
-                <option value="promote" ${!isGrad ? 'selected' : ''}>เลื่อนชั้นอัตโนมัติ</option>
-                <option value="repeat">ซ้ำชั้น (คงชั้นเดิม)</option>
-                <option value="graduate" ${isGrad ? 'selected' : ''}>จบการศึกษา</option>
+              <select data-stu-id="${stu.id}" class="promote-action-sel bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white">
+                <option value="promote" ${nextCls !== 'จบการศึกษา' ? 'selected' : ''}>เลื่อนชั้นอัตโนมัติ (${nextCls})</option>
+                <option value="repeat">ซ้ำชั้น (${stu.class})</option>
+                <option value="graduate" ${nextCls === 'จบการศึกษา' ? 'selected' : ''}>จบการศึกษา</option>
               </select>
             </td>
-            <td class="px-4 py-2.5 text-center font-bold text-indigo-400 promote-next-label">${nextCls}</td>
-          </tr>`;
+            <td class="px-4 py-2.5 text-center font-bold text-emerald-400 promote-next-label">${nextCls}</td>
+          </tr>
+        `;
       }).join('');
 
-      tbody.querySelectorAll('.sel-promote-action').forEach(sel => {
+      tbody.querySelectorAll('.promote-action-sel').forEach(sel => {
         sel.addEventListener('change', () => {
-          const row = sel.closest('tr');
-          const stu = state.students.find(s => s.id === row.dataset.stuId);
-          const lbl = row.querySelector('.promote-next-label');
-          const chk = row.querySelector('.chk-promote');
-          if (sel.value === 'promote') { lbl.textContent = getNextClass(stu.className); chk.checked = true; }
-          else if (sel.value === 'repeat') { lbl.textContent = stu.className; chk.checked = true; }
-          else { lbl.textContent = 'จบการศึกษา'; chk.checked = false; }
+          const stu = state.students.find(s => s.id === sel.dataset.stuId);
+          const lbl = sel.closest('tr').querySelector('.promote-next-label');
+          if (sel.value === 'promote') lbl.textContent = getNextClass(stu.class);
+          else if (sel.value === 'repeat') lbl.textContent = stu.class;
+          else lbl.textContent = 'จบการศึกษา';
         });
       });
     }
 
-    // ==================== PDF GENERATION (THAI SARABUN VIA HTML2CANVAS) ====================
-    async function exportThaiPDF(titleText, subtitleText, tableHtml) {
-      showToast('กำลังสร้างไฟล์ PDF ภาษาไทย...');
+    function renderAdminPurgeTab() {
+      const sel = document.getElementById('purge-old-year-select');
+      const cur = parseInt(state.currentYear, 10);
+      const oldYears = ['2567', '2568', '2569'].filter(y => parseInt(y, 10) < cur);
+      if (oldYears.length === 0) {
+        sel.innerHTML = `<option value="">ไม่มีปีการศึกษาเก่ากว่าปีปัจจุบัน (${state.currentYear})</option>`;
+      } else {
+        sel.innerHTML = oldYears.map(y => `<option value="${y}">ปีการศึกษา ${y}</option>`).join('');
+      }
+      document.getElementById('purge-confirm-input').value = '';
+      document.getElementById('btn-execute-purge').disabled = true;
+    }
+
+    // ==================== HIGH-RES THAI PDF EXPORTS ====================
+    async function exportHtmlElementToPdf(containerHtml, filename) {
+      showToast('กำลังสร้างไฟล์ PDF ภาษาไทย...', 'success');
       const wrapper = document.createElement('div');
       wrapper.style.position = 'fixed';
       wrapper.style.left = '-9999px';
       wrapper.style.top = '0';
-      wrapper.style.width = '1120px';
+      wrapper.style.width = '1122px'; // A4 Landscape width at 96dpi
       wrapper.style.background = '#ffffff';
       wrapper.style.color = '#0f172a';
-      wrapper.style.padding = '36px 42px';
       wrapper.style.fontFamily = "'Sarabun', sans-serif";
-
-      wrapper.innerHTML = `
-        <div style="text-align:center; margin-bottom:18px; border-bottom:2px solid #1e293b; padding-bottom:12px;">
-          <h1 style="font-size:22px; font-weight:700; margin:0;">โรงเรียนวัดพระธาตุ</h1>
-          <h2 style="font-size:18px; font-weight:600; margin:4px 0;">${titleText}</h2>
-          <p style="font-size:14px; color:#334155; margin:2px 0;">${subtitleText}</p>
-        </div>
-        <div style="font-size:13px;">${tableHtml}</div>
-        <div style="margin-top:42px; display:flex; justify-content:flex-end; padding-right:40px;">
-          <div style="text-align:center; font-size:15px; line-height:1.7;">
-            <div>ลงชื่อ...........................................................</div>
-            <div>(นายเกริกฤทธิ์ เมฆดี)</div>
-            <div>ครูผู้สอน</div>
-          </div>
-        </div>
-      `;
+      wrapper.style.padding = '36px 44px';
+      wrapper.innerHTML = containerHtml;
       document.body.appendChild(wrapper);
 
       try {
+        await document.fonts.ready;
         const canvas = await html2canvas(wrapper, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
         const imgData = canvas.toDataURL('image/png');
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`${titleText}_${state.currentYear}.pdf`);
-        showToast('ดาวน์โหลด PDF เรียบร้อยแล้ว');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+
+        pdf.save(filename);
+        showToast('ดาวน์โหลดไฟล์ PDF เรียบร้อยแล้ว');
       } catch (err) {
         console.error(err);
         showToast('เกิดข้อผิดพลาดในการสร้าง PDF', 'error');
@@ -2156,159 +2456,91 @@
       }
     }
 
-    // ==================== EVENT LISTENERS ====================
-    function setupEvents() {
+    function buildSignatureBlockHtml() {
+      return `
+        <div style="margin-top: 36px; display: flex; justify-content: flex-end; padding-right: 40px;">
+          <div style="text-align: center; font-size: 15px; line-height: 1.7; color: #0f172a;">
+            <div>ลงชื่อ...........................................................</div>
+            <div>(นายเกริกฤทธิ์ เมฆดี)</div>
+            <div>ครูผู้สอน</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ==================== EVENT LISTENERS SETUP ====================
+    function initEventListeners() {
       // Mobile Sidebar Toggle
-      const sidebar = document.getElementById('sidebar');
-      const backdrop = document.getElementById('mobile-backdrop');
-      const openSidebar = () => { sidebar.classList.remove('-translate-x-full'); backdrop.classList.remove('hidden'); };
-      const closeSidebar = () => { sidebar.classList.add('-translate-x-full'); backdrop.classList.add('hidden'); };
-
-      document.getElementById('btn-mobile-menu')?.addEventListener('click', openSidebar);
-      document.getElementById('btn-close-sidebar')?.addEventListener('click', closeSidebar);
-      backdrop?.addEventListener('click', closeSidebar);
-
-      // Menu Switching
-      const switchMenu = (menuName) => {
-        if (menuName === 'admin' && !state.adminUnlocked) {
-          state.pinEntered = '';
-          updatePinDots();
-          document.getElementById('modal-pin').classList.remove('hidden');
-          closeSidebar();
-          return;
-        }
-        state.currentMenu = menuName;
-        document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
-        document.getElementById(`view-${menuName}`)?.classList.remove('hidden');
-
-        document.querySelectorAll('.nav-item').forEach(btn => {
-          const isActive = btn.dataset.menu === menuName;
-          btn.className = isActive
-            ? 'nav-item w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium bg-indigo-500 text-white shadow-md shadow-indigo-500/20 transition'
-            : 'nav-item w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-slate-700/60 hover:text-white transition';
-          const iconEl = btn.querySelector('i.fa-solid');
-          if (iconEl && !iconEl.id) {
-            if (isActive) {
-              iconEl.dataset.origColor = Array.from(iconEl.classList).find(c => c.startsWith('text-')) || '';
-              if (iconEl.dataset.origColor) iconEl.classList.remove(iconEl.dataset.origColor);
-              iconEl.classList.add('text-white');
-            } else if (iconEl.dataset.origColor) {
-              iconEl.classList.remove('text-white');
-              iconEl.classList.add(iconEl.dataset.origColor);
-            }
-          }
-        });
-        closeSidebar();
-        renderCurrentMenu();
+      document.getElementById('btn-mobile-menu')?.addEventListener('click', () => {
+        document.getElementById('sidebar').classList.remove('-translate-x-full');
+        document.getElementById('mobile-backdrop').classList.remove('hidden');
+      });
+      const closeSidebar = () => {
+        document.getElementById('sidebar').classList.add('-translate-x-full');
+        document.getElementById('mobile-backdrop').classList.add('hidden');
       };
+      document.getElementById('btn-close-sidebar')?.addEventListener('click', closeSidebar);
+      document.getElementById('mobile-backdrop')?.addEventListener('click', closeSidebar);
 
+      // Menu Navigation
       document.querySelectorAll('.nav-item').forEach(btn => {
         btn.addEventListener('click', () => switchMenu(btn.dataset.menu));
       });
 
-      // Restore Menu & Subtabs on Reload
-      if (state.currentMenu === 'admin' && !state.adminUnlocked) {
-        switchMenu('dashboard');
-      } else {
-        switchMenu(state.currentMenu);
-      }
-      if (state.adminUnlocked) {
-        document.getElementById('admin-lock-icon')?.classList.replace('fa-lock', 'fa-lock-open');
-      }
-      if (state.adminSubtab && state.adminSubtab !== 'classes') {
-        document.querySelector(`.admin-tab-btn[data-admin-subtab="${state.adminSubtab}"]`)?.click();
-      }
-      if (state.savingsTab === 'monthly') {
-        document.getElementById('tab-savings-monthly-btn')?.click();
-      }
-
-      // 5-Minute Admin Session Countdown Timer
-      setInterval(() => {
-        if (!state.adminUnlocked) return;
-        const expiry = parseInt(localStorage.getItem('kroek_admin_expiry') || '0', 10);
-        const remaining = expiry - Date.now();
-        if (remaining <= 0) {
-          state.adminUnlocked = false;
-          localStorage.removeItem('kroek_admin_expiry');
-          document.getElementById('admin-lock-icon')?.classList.replace('fa-lock-open', 'fa-lock');
-          if (state.currentMenu === 'admin') {
-            switchMenu('dashboard');
-          }
-          showToast('หมดเวลาเซสชัน Admin (5 นาที) ระบบล็อกอัตโนมัติแล้ว', 'error');
-        } else {
-          const mins = String(Math.floor(remaining / 60000)).padStart(2, '0');
-          const secs = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
-          const timerEl = document.getElementById('admin-session-timer');
-          if (timerEl) timerEl.textContent = `เหลือเวลา ${mins}:${secs}`;
-        }
-      }, 1000);
-
-      // Academic Year Change
+      // Year Switchers
       document.querySelectorAll('.year-select').forEach(sel => {
         sel.addEventListener('change', (e) => {
           state.currentYear = e.target.value;
-          document.querySelectorAll('.year-select').forEach(s => s.value = state.currentYear);
-          loadLocalData();
-          startFirebaseSync();
-          renderCurrentMenu();
+          document.querySelectorAll('.year-select').forEach(other => other.value = state.currentYear);
+          subscribeToYearData(state.currentYear);
           showToast(`เปลี่ยนเป็นปีการศึกษา ${state.currentYear}`);
         });
       });
 
-      // Dependent Dropdowns (Class -> Subjects)
-      const bindClassToSubject = (clsId, subId, callback) => {
+      // Cascading Class -> Subject Filters
+      const bindClassToSubject = (clsId, subId, renderFn) => {
         document.getElementById(clsId)?.addEventListener('change', () => {
-          populateSubjectSelects();
-          callback();
+          delete state.filters[subId];
+          syncSubjectDropdownForClass(clsId, subId);
+          renderFn();
         });
-        document.getElementById(subId)?.addEventListener('change', callback);
+        document.getElementById(subId)?.addEventListener('change', renderFn);
       };
 
-      bindClassToSubject('dash-filter-class', 'dash-filter-subject', renderDashboard);
-      bindClassToSubject('check-select-class', 'check-select-subject', renderCheckinList);
-      document.getElementById('check-input-date')?.addEventListener('change', renderCheckinList);
+      bindClassToSubject('dash-filter-class', 'dash-filter-subject', renderDashboardView);
+      bindClassToSubject('check-select-class', 'check-select-subject', renderCheckinView);
+      bindClassToSubject('sub-summary-class', 'sub-summary-subject', renderSubjectSummaryView);
+      bindClassToSubject('ind-summary-class', 'ind-summary-subject', renderIndividualSummaryView);
 
-      bindClassToSubject('sub-summary-class', 'sub-summary-subject', renderSubjectSummary);
-      document.getElementById('sub-summary-month')?.addEventListener('change', renderSubjectSummary);
+      document.getElementById('check-input-date')?.addEventListener('change', renderCheckinView);
+      document.getElementById('sub-summary-month')?.addEventListener('change', renderSubjectSummaryView);
+      document.getElementById('ind-summary-month')?.addEventListener('change', renderIndividualSummaryView);
 
-      bindClassToSubject('ind-summary-class', 'ind-summary-subject', renderIndividualSummary);
-      document.getElementById('ind-summary-month')?.addEventListener('change', renderIndividualSummary);
-
-      // Mark All Present / Absent & Save Attendance
+      // Check-in Bulk & Save
       document.getElementById('btn-mark-all-present')?.addEventListener('click', () => {
-        document.querySelectorAll('#check-student-list .att-choice-btn[data-status="P"]').forEach(b => b.click());
+        Object.keys(draftAttendance).forEach(id => draftAttendance[id] = 'present');
+        renderCheckinDraftButtons();
       });
       document.getElementById('btn-mark-all-absent')?.addEventListener('click', () => {
-        document.querySelectorAll('#check-student-list .att-choice-btn[data-status="A"]').forEach(b => b.click());
+        Object.keys(draftAttendance).forEach(id => draftAttendance[id] = 'absent');
+        renderCheckinDraftButtons();
       });
-
       document.getElementById('btn-save-attendance')?.addEventListener('click', async () => {
+        const cls = document.getElementById('check-select-class').value;
         const sub = document.getElementById('check-select-subject').value;
-        const dateVal = document.getElementById('check-input-date').value;
-        if (!dateVal) return showToast('กรุณาเลือกวันที่', 'error');
-
-        if (!state.attendance[dateVal]) state.attendance[dateVal] = {};
-        if (!state.attendance[dateVal][sub]) state.attendance[dateVal][sub] = {};
-
-        document.querySelectorAll('#check-student-list [data-student-id]').forEach(row => {
-          const stuId = row.dataset.studentId;
-          const activeBtn = row.querySelector('.att-choice-btn.bg-emerald-500, .att-choice-btn.bg-rose-500');
-          state.attendance[dateVal][sub][stuId] = activeBtn ? activeBtn.dataset.status : 'P';
-        });
-
-        localStorage.setItem(`kroek_${state.currentYear}_attendance`, JSON.stringify(state.attendance));
-        try {
-          await setDoc(doc(db, 'years', `${state.currentYear}_attendance`), { records: state.attendance });
-        } catch (e) {}
+        const dt = document.getElementById('check-input-date').value;
+        if (!dt) return showToast('กรุณาเลือกวันที่เช็คชื่อ', 'error');
+        state.attendance[`${cls}|${sub}|${dt}`] = { ...draftAttendance };
+        await saveAttendanceToCloud();
         persistSessionAndReload('บันทึกเวลาเรียนเรียบร้อยแล้ว');
       });
 
-      // Alerts Filter Buttons
+      // Alerts Filter
       document.querySelectorAll('.alert-filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           state.alertFilter = btn.dataset.alertFilter;
           document.querySelectorAll('.alert-filter-btn').forEach(b => {
-            b.className = b === btn
+            b.className = b.dataset.alertFilter === state.alertFilter
               ? 'alert-filter-btn px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold transition'
               : 'alert-filter-btn px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold transition';
           });
@@ -2316,42 +2548,43 @@
         });
       });
 
-      // Savings Sub-tabs & Controls
+      // Savings Subtabs & Filters
       document.getElementById('tab-savings-daily-btn')?.addEventListener('click', () => {
         state.savingsTab = 'daily';
-        document.getElementById('savings-daily-panel').classList.remove('hidden');
-        document.getElementById('savings-monthly-panel').classList.add('hidden');
-        document.getElementById('tab-savings-daily-btn').classList.add('bg-indigo-600', 'text-white');
-        document.getElementById('tab-savings-monthly-btn').classList.remove('bg-indigo-600', 'text-white');
-        renderSavingsDaily();
+        renderSavingsView();
       });
       document.getElementById('tab-savings-monthly-btn')?.addEventListener('click', () => {
         state.savingsTab = 'monthly';
-        document.getElementById('savings-monthly-panel').classList.remove('hidden');
-        document.getElementById('savings-daily-panel').classList.add('hidden');
-        document.getElementById('tab-savings-monthly-btn').classList.add('bg-indigo-600', 'text-white');
-        document.getElementById('tab-savings-daily-btn').classList.remove('bg-indigo-600', 'text-white');
-        renderSavingsMonthlyMatrix();
+        renderSavingsView();
       });
-
-      document.getElementById('savings-daily-class')?.addEventListener('change', renderSavingsDaily);
-      document.getElementById('savings-daily-date')?.addEventListener('change', renderSavingsDaily);
+      document.getElementById('savings-daily-class')?.addEventListener('change', () => { draftSavings = {}; renderSavingsDaily(); });
+      document.getElementById('savings-daily-date')?.addEventListener('change', () => { draftSavings = {}; renderSavingsDaily(); });
       document.getElementById('savings-monthly-class')?.addEventListener('change', renderSavingsMonthlyMatrix);
       document.getElementById('savings-monthly-month')?.addEventListener('change', renderSavingsMonthlyMatrix);
       document.getElementById('savings-monthly-mode')?.addEventListener('change', renderSavingsMonthlyMatrix);
 
-      // Numpad Logic
+      document.getElementById('btn-save-daily-savings')?.addEventListener('click', async () => {
+        const cls = document.getElementById('savings-daily-class').value;
+        const dt = document.getElementById('savings-daily-date').value;
+        if (!dt) return showToast('กรุณาเลือกวันที่ฝากเงิน', 'error');
+        state.savings[`${cls}|${dt}`] = { ...draftSavings };
+        await saveSavingsToCloud();
+        persistSessionAndReload('บันทึกยอดออมทรัพย์เรียบร้อยแล้ว');
+      });
+
+      // Numpad Modal Events
       document.querySelectorAll('.numpad-digit').forEach(btn => {
         btn.addEventListener('click', () => {
           const d = btn.dataset.val;
           state.numpadVal = state.numpadVal === '0' ? d : state.numpadVal + d;
-          document.getElementById('numpad-display').textContent = Number(state.numpadVal).toLocaleString();
+          document.getElementById('numpad-display').textContent = state.numpadVal;
         });
       });
       document.querySelectorAll('.numpad-preset').forEach(btn => {
         btn.addEventListener('click', () => {
-          state.numpadVal = String(Number(state.numpadVal) + Number(btn.dataset.add));
-          document.getElementById('numpad-display').textContent = Number(state.numpadVal).toLocaleString();
+          const add = parseInt(btn.dataset.add, 10) || 0;
+          state.numpadVal = String((parseInt(state.numpadVal, 10) || 0) + add);
+          document.getElementById('numpad-display').textContent = state.numpadVal;
         });
       });
       document.getElementById('btn-numpad-clear')?.addEventListener('click', () => {
@@ -2360,57 +2593,143 @@
       });
       document.getElementById('btn-numpad-back')?.addEventListener('click', () => {
         state.numpadVal = state.numpadVal.length > 1 ? state.numpadVal.slice(0, -1) : '0';
-        document.getElementById('numpad-display').textContent = Number(state.numpadVal).toLocaleString();
+        document.getElementById('numpad-display').textContent = state.numpadVal;
       });
       document.getElementById('btn-close-numpad')?.addEventListener('click', () => {
         document.getElementById('modal-numpad').classList.add('hidden');
       });
       document.getElementById('btn-numpad-confirm')?.addEventListener('click', () => {
-        const amount = Number(state.numpadVal) || 0;
-        const row = document.querySelector(`#savings-daily-tbody tr[data-stu-id="${state.activeNumpadStudentId}"]`);
-        if (row) {
-          row.dataset.val = String(amount);
-          row.querySelector('.sav-status-cell').innerHTML = amount > 0
-            ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-xs">+${amount.toLocaleString()} บาท</span>`
-            : `<span class="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 font-semibold text-xs">ไม่ฝาก (0 ฿)</span>`;
+        if (state.activeNumpadStudentId) {
+          draftSavings[state.activeNumpadStudentId] = parseInt(state.numpadVal, 10) || 0;
         }
         document.getElementById('modal-numpad').classList.add('hidden');
+        renderSavingsDaily();
       });
 
-      // Save Daily Savings
-      document.getElementById('btn-save-daily-savings')?.addEventListener('click', async () => {
-        const dateVal = document.getElementById('savings-daily-date').value;
-        if (!dateVal) return showToast('กรุณาเลือกวันที่ฝากเงิน', 'error');
-        if (!state.savings[dateVal]) state.savings[dateVal] = {};
+      // PDF Export Buttons
+      document.getElementById('btn-pdf-subject')?.addEventListener('click', () => {
+        const cls = document.getElementById('sub-summary-class').value;
+        const sub = document.getElementById('sub-summary-subject').value;
+        const month = document.getElementById('sub-summary-month').value;
+        const periodLabel = month === 'ALL' ? 'ตลอดปีการศึกษา' : `เดือน${THAI_MONTHS[month]}`;
+        const rows = getSubjectSummaryRows(cls, sub, month);
 
-        document.querySelectorAll('#savings-daily-tbody tr[data-stu-id]').forEach(row => {
-          const stuId = row.dataset.stuId;
-          const rawVal = row.dataset.val;
-          if (rawVal === 'absent') state.savings[dateVal][stuId] = 'absent';
-          else if (rawVal !== '') state.savings[dateVal][stuId] = Number(rawVal);
-        });
-
-        localStorage.setItem(`kroek_${state.currentYear}_savings`, JSON.stringify(state.savings));
-        try {
-          await setDoc(doc(db, 'years', `${state.currentYear}_savings`), { records: state.savings });
-        } catch (e) {}
-        persistSessionAndReload('บันทึกยอดออมทรัพย์เรียบร้อยแล้ว');
+        const html = `
+          <div style="text-align: center; margin-bottom: 18px;">
+            <h2 style="font-size: 20px; font-weight: bold; margin: 0;">รายงานสรุปผลการมาเรียนรายวิชา โรงเรียนวัดพระธาตุ</h2>
+            <p style="font-size: 15px; margin: 6px 0 0 0;">ปีการศึกษา ${state.currentYear} • ระดับชั้น ${cls} • รายวิชา ${sub} • ช่วงเวลา: ${periodLabel}</p>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="background: #f1f5f9;">
+                <th style="border: 1px solid #94a3b8; padding: 8px; width: 60px;">เลขที่</th>
+                <th style="border: 1px solid #94a3b8; padding: 8px; text-align: left;">ชื่อ - นามสกุล</th>
+                <th style="border: 1px solid #94a3b8; padding: 8px; width: 70px;">เพศ</th>
+                <th style="border: 1px solid #94a3b8; padding: 8px; width: 90px;">มา (ครั้ง)</th>
+                <th style="border: 1px solid #94a3b8; padding: 8px; width: 90px;">ขาด (ครั้ง)</th>
+                <th style="border: 1px solid #94a3b8; padding: 8px; width: 110px;">ร้อยละมาเรียน</th>
+                <th style="border: 1px solid #94a3b8; padding: 8px; width: 120px;">ผลการประเมิน</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td style="border: 1px solid #94a3b8; padding: 7px; text-align: center;">${r.no}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 7px;">${r.name}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 7px; text-align: center;">${r.gender === 'female' ? 'หญิง' : 'ชาย'}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 7px; text-align: center;">${r.present}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 7px; text-align: center;">${r.absent}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 7px; text-align: center;">${r.pct}%</td>
+                  <td style="border: 1px solid #94a3b8; padding: 7px; text-align: center;">${r.total === 0 ? '-' : (r.pass ? 'ผ่านเกณฑ์' : 'ต่ำกว่า 80%')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ${buildSignatureBlockHtml()}
+        `;
+        exportHtmlElementToPdf(html, `สรุปมาเรียน_${sub}_${cls}_${state.currentYear}.pdf`);
       });
 
-      // PIN Modal Logic (Keyboard + On-Screen Keypad)
-      function updatePinDots(isError = false) {
-        const dots = document.querySelectorAll('#pin-dots .pin-dot');
-        dots.forEach((dot, idx) => {
-          if (isError) {
-            dot.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-rose-500 transition-colors';
-          } else if (idx < state.pinEntered.length) {
-            dot.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-indigo-400 transition-colors';
-          } else {
-            dot.className = 'pin-dot w-3.5 h-3.5 rounded-full bg-slate-600 transition-colors';
-          }
-        });
-      }
+      document.getElementById('btn-pdf-individual')?.addEventListener('click', () => {
+        const cls = document.getElementById('ind-summary-class').value;
+        const sub = document.getElementById('ind-summary-subject').value;
+        const month = document.getElementById('ind-summary-month').value;
+        const { activeDates, matrixRows } = getIndividualMatrixData(cls, sub, month);
 
+        const html = `
+          <div style="text-align: center; margin-bottom: 16px;">
+            <h2 style="font-size: 20px; font-weight: bold; margin: 0;">บัญชีบันทึกเวลาเรียนรายบุคคล โรงเรียนวัดพระธาตุ</h2>
+            <p style="font-size: 15px; margin: 6px 0 0 0;">ประจำเดือน${THAI_MONTHS[month]} ปีการศึกษา ${state.currentYear} • ระดับชั้น ${cls} • รายวิชา ${sub}</p>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead>
+              <tr style="background: #f1f5f9;">
+                <th style="border: 1px solid #94a3b8; padding: 6px; width: 45px;">เลขที่</th>
+                <th style="border: 1px solid #94a3b8; padding: 6px; text-align: left; min-width: 160px;">ชื่อ - นามสกุล</th>
+                ${activeDates.map(d => `<th style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${parseInt(d.split('-')[2], 10)}</th>`).join('')}
+                <th style="border: 1px solid #94a3b8; padding: 6px; width: 55px;">รวมมา</th>
+                <th style="border: 1px solid #94a3b8; padding: 6px; width: 55px;">รวมขาด</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${matrixRows.map(r => `
+                <tr>
+                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${r.no}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 6px;">${r.name}</td>
+                  ${r.cells.map(st => `<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${st === 'present' ? '/' : (st === 'absent' ? 'ข' : '-')}</td>`).join('')}
+                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${r.present}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold;">${r.absent}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ${buildSignatureBlockHtml()}
+        `;
+        exportHtmlElementToPdf(html, `เวลาเรียนรายบุคคล_${sub}_${cls}_${THAI_MONTHS[month]}.pdf`);
+      });
+
+      document.getElementById('btn-pdf-savings')?.addEventListener('click', () => {
+        const cls = document.getElementById('savings-monthly-class').value;
+        const month = document.getElementById('savings-monthly-month').value;
+        const mode = document.getElementById('savings-monthly-mode').value;
+        const { dayColumns, rows, dayTotals, grandTotal } = getSavingsMatrixData(cls, month, mode);
+
+        const html = `
+          <div style="text-align: center; margin-bottom: 16px;">
+            <h2 style="font-size: 20px; font-weight: bold; margin: 0;">รายงานสรุปยอดเงินออมทรัพย์นักเรียน โรงเรียนวัดพระธาตุ</h2>
+            <p style="font-size: 15px; margin: 6px 0 0 0;">ประจำเดือน${THAI_MONTHS[month]} ปีการศึกษา ${state.currentYear} • ระดับชั้น ${cls}</p>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead>
+              <tr style="background: #f1f5f9;">
+                <th style="border: 1px solid #94a3b8; padding: 6px; width: 45px;">เลขที่</th>
+                <th style="border: 1px solid #94a3b8; padding: 6px; text-align: left; min-width: 160px;">ชื่อ - นามสกุล</th>
+                ${dayColumns.map(d => `<th style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${parseInt(d, 10)}</th>`).join('')}
+                <th style="border: 1px solid #94a3b8; padding: 6px; text-align: right; width: 85px;">รวม (บาท)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${r.no}</td>
+                  <td style="border: 1px solid #94a3b8; padding: 6px;">${r.name}</td>
+                  ${r.cells.map(v => `<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${v > 0 ? v : '-'}</td>`).join('')}
+                  <td style="border: 1px solid #94a3b8; padding: 6px; text-align: right; font-weight: bold;">${r.rowSum.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+              <tr style="background: #f8fafc; font-weight: bold;">
+                <td colspan="2" style="border: 1px solid #94a3b8; padding: 6px; text-align: right;">รวมยอดทั้งหมด</td>
+                ${dayColumns.map(d => `<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center;">${dayTotals[d] > 0 ? dayTotals[d].toLocaleString() : '-'}</td>`).join('')}
+                <td style="border: 1px solid #94a3b8; padding: 6px; text-align: right;">${grandTotal.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>
+          ${buildSignatureBlockHtml()}
+        `;
+        exportHtmlElementToPdf(html, `ออมทรัพย์_${cls}_${THAI_MONTHS[month]}_${state.currentYear}.pdf`);
+      });
+
+      // PIN Keypad Logic
       function handlePinInput(digit) {
         if (state.pinEntered.length >= state.adminPin.length) return;
         state.pinEntered += digit;
@@ -2418,16 +2737,13 @@
         if (state.pinEntered.length === state.adminPin.length) {
           if (state.pinEntered === state.adminPin) {
             state.adminUnlocked = true;
-            localStorage.setItem('kroek_admin_expiry', String(Date.now() + ADMIN_TIMEOUT_MS));
+            setAdminExpiry(Date.now() + ADMIN_TIMEOUT_MS);
             document.getElementById('admin-lock-icon')?.classList.replace('fa-lock', 'fa-lock-open');
             document.getElementById('modal-pin').classList.add('hidden');
             switchMenu('admin');
           } else {
             updatePinDots(true);
-            const card = document.getElementById('pin-modal-card');
-            card.classList.add('animate-shake');
             setTimeout(() => {
-              card.classList.remove('animate-shake');
               state.pinEntered = '';
               updatePinDots(false);
             }, 450);
@@ -2447,37 +2763,43 @@
       });
 
       document.addEventListener('keydown', (e) => {
-        const pinModal = document.getElementById('modal-pin');
-        if (pinModal.classList.contains('hidden')) return;
-        if (/^[0-9]$/.test(e.key)) handlePinInput(e.key);
-        else if (e.key === 'Backspace') { state.pinEntered = state.pinEntered.slice(0, -1); updatePinDots(false); }
-        else if (e.key === 'Escape') pinModal.classList.add('hidden');
+        if (!document.getElementById('modal-pin').classList.contains('hidden')) {
+          if (/^[0-9]$/.test(e.key)) handlePinInput(e.key);
+          else if (e.key === 'Backspace') {
+            state.pinEntered = state.pinEntered.slice(0, -1);
+            updatePinDots(false);
+          } else if (e.key === 'Escape') {
+            document.getElementById('modal-pin').classList.add('hidden');
+          }
+        }
       });
 
       // Change PIN & Logout
       document.getElementById('btn-open-change-pin')?.addEventListener('click', () => {
+        document.getElementById('input-old-pin').value = '';
+        document.getElementById('input-new-pin').value = '';
+        document.getElementById('input-confirm-pin').value = '';
         document.getElementById('modal-change-pin').classList.remove('hidden');
       });
       document.getElementById('btn-cancel-change-pin')?.addEventListener('click', () => {
         document.getElementById('modal-change-pin').classList.add('hidden');
       });
       document.getElementById('btn-save-new-pin')?.addEventListener('click', () => {
-        const oldP = document.getElementById('input-old-pin').value;
-        const newP = document.getElementById('input-new-pin').value;
-        const conP = document.getElementById('input-confirm-pin').value;
+        const oldP = document.getElementById('input-old-pin').value.trim();
+        const newP = document.getElementById('input-new-pin').value.trim();
+        const confP = document.getElementById('input-confirm-pin').value.trim();
         if (oldP !== state.adminPin) return showToast('รหัส PIN เดิมไม่ถูกต้อง', 'error');
         if (!/^\d{4,8}$/.test(newP)) return showToast('รหัสใหม่ต้องเป็นตัวเลข 4-8 หลัก', 'error');
-        if (newP !== conP) return showToast('ยืนยันรหัสใหม่ไม่ตรงกัน', 'error');
-
+        if (newP !== confP) return showToast('ยืนยันรหัสใหม่ไม่ตรงกัน', 'error');
         state.adminPin = newP;
-        localStorage.setItem('kroek_admin_pin', newP);
+        try { localStorage.setItem('kroek_admin_pin', newP); } catch (e) {}
         document.getElementById('modal-change-pin').classList.add('hidden');
-        showToast('เปลี่ยนรหัส PIN เรียบร้อยแล้ว');
+        showToast('เปลี่ยนรหัส PIN สำเร็จ');
       });
 
       document.getElementById('btn-admin-logout')?.addEventListener('click', () => {
         state.adminUnlocked = false;
-        localStorage.removeItem('kroek_admin_expiry');
+        clearAdminExpiry();
         document.getElementById('admin-lock-icon')?.classList.replace('fa-lock-open', 'fa-lock');
         switchMenu('dashboard');
         showToast('ออกจากระบบ Admin แล้ว');
@@ -2485,99 +2807,89 @@
 
       // Admin Sub-tabs
       document.querySelectorAll('.admin-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const tab = btn.dataset.adminSubtab;
-          state.adminSubtab = tab;
-          document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.add('hidden'));
-          document.getElementById(`admin-subtab-${tab}`)?.classList.remove('hidden');
-          document.querySelectorAll('.admin-tab-btn').forEach(b => {
-            const active = b.dataset.adminSubtab === tab;
-            b.classList.toggle('border-indigo-500', active);
-            b.classList.toggle('text-indigo-400', active);
-            b.classList.toggle('border-transparent', !active);
-            b.classList.toggle('text-slate-400', !active);
-          });
-        });
+        btn.addEventListener('click', () => switchAdminSubtab(btn.dataset.adminSubtab));
       });
 
-      // Admin Add Classroom & Subject
+      // Admin Sub-tab 1: Add Class & Add Subject
       document.getElementById('btn-admin-add-class')?.addEventListener('click', async () => {
         const val = document.getElementById('admin-new-class-input').value.trim();
         if (!val) return showToast('กรุณากรอกชื่อห้องเรียน', 'error');
         if (state.classes.includes(val)) return showToast('มีห้องเรียนนี้อยู่แล้ว', 'error');
         state.classes.push(val);
-        if (!state.subjectsByClass[val]) {
-          state.subjectsByClass[val] = val.startsWith('ม.') ? [...SECONDARY_SUBJECTS] : [...PRIMARY_SUBJECTS];
-        }
-        localStorage.setItem('kroek_classes', JSON.stringify(state.classes));
-        localStorage.setItem('kroek_subjects_by_class', JSON.stringify(state.subjectsByClass));
-        try {
-          await setDoc(doc(db, 'config', 'classrooms'), { list: state.classes });
-          await setDoc(doc(db, 'config', 'subjects'), { byClass: state.subjectsByClass });
-        } catch (e) {}
-        persistSessionAndReload(`สร้างห้องเรียน ${val} เรียบร้อยแล้ว`);
+        state.subjectsByLevel[val] = val.startsWith('ม.') ? [...SECONDARY_SUBJECTS] : [...PRIMARY_SUBJECTS];
+        await saveMetadataToCloud();
+        persistSessionAndReload(`เพิ่มห้องเรียน ${val} เรียบร้อยแล้ว`);
       });
 
-      document.getElementById('admin-subject-manage-class')?.addEventListener('change', renderAdminView);
+      document.getElementById('admin-subject-manage-class')?.addEventListener('change', renderAdminClassesAndSubjects);
 
       document.getElementById('btn-admin-add-subject')?.addEventListener('click', async () => {
-        const targetCls = document.getElementById('admin-subject-manage-class').value;
-        const subName = document.getElementById('admin-new-subject-input').value.trim();
-        if (!subName) return showToast('กรุณากรอกชื่อวิชา', 'error');
-        const currentList = getSubjectsForClass(targetCls);
-        if (currentList.includes(subName)) return showToast('มีวิชานี้ในระดับชั้นที่เลือกแล้ว', 'error');
-        state.subjectsByClass[targetCls] = [...currentList, subName];
-        localStorage.setItem('kroek_subjects_by_class', JSON.stringify(state.subjectsByClass));
-        try { await setDoc(doc(db, 'config', 'subjects'), { byClass: state.subjectsByClass }); } catch (e) {}
-        persistSessionAndReload(`เพิ่มวิชา "${subName}" ในห้อง ${targetCls} เรียบร้อยแล้ว`);
+        const cls = document.getElementById('admin-subject-manage-class').value;
+        const val = document.getElementById('admin-new-subject-input').value.trim();
+        if (!val) return showToast('กรุณากรอกชื่อรายวิชา', 'error');
+        const list = getSubjectsForClass(cls);
+        if (list.includes(val)) return showToast('มีรายวิชานี้ในระดับชั้นนี้แล้ว', 'error');
+        state.subjectsByLevel[cls] = [...list, val];
+        await saveMetadataToCloud();
+        persistSessionAndReload(`เพิ่มวิชา ${val} ในชั้น ${cls} แล้ว`);
       });
 
-      // Update subject checkboxes when classroom changes in Add/Edit Student
-      document.getElementById('admin-student-class')?.addEventListener('change', (e) => {
-        renderSubjectCheckboxes('admin-student-subjects', e.target.value, null);
-      });
-      document.getElementById('btn-toggle-all-stu-subjects')?.addEventListener('click', () => {
-        const boxes = document.querySelectorAll('#admin-student-subjects input[type="checkbox"]');
-        const allChecked = Array.from(boxes).every(b => b.checked);
-        boxes.forEach(b => { b.checked = !allChecked; });
-      });
-
-      // Admin Student Live Gender Preview & Save
+      // Admin Sub-tab 2: Students Management
+      document.getElementById('admin-student-class')?.addEventListener('change', renderSingleStudentSubjectCheckboxes);
       document.getElementById('admin-student-fullname')?.addEventListener('input', (e) => {
         const g = detectGender(e.target.value);
         const badge = document.getElementById('admin-gender-preview-badge');
-        badge.textContent = g === 'M' ? '♂ ชาย' : '♀ หญิง';
-        badge.className = `text-xs px-2 py-0.5 rounded-full font-bold ${g === 'M' ? 'bg-blue-500/20 text-blue-300' : 'bg-pink-500/20 text-pink-300'}`;
+        if (g === 'female') {
+          badge.className = 'text-xs px-2 py-0.5 rounded-full font-bold bg-pink-500/20 text-pink-300';
+          badge.textContent = '♀ หญิง';
+        } else {
+          badge.className = 'text-xs px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-300';
+          badge.textContent = '♂ ชาย';
+        }
+      });
+
+      document.getElementById('btn-toggle-all-stu-subjects')?.addEventListener('click', () => {
+        const cbs = document.querySelectorAll('.stu-sub-cb');
+        const allChecked = Array.from(cbs).every(cb => cb.checked);
+        cbs.forEach(cb => cb.checked = !allChecked);
       });
 
       document.getElementById('btn-admin-save-student')?.addEventListener('click', async () => {
-        const className = document.getElementById('admin-student-class').value;
+        const cls = document.getElementById('admin-student-class').value;
         const no = parseInt(document.getElementById('admin-student-no').value, 10);
         const name = document.getElementById('admin-student-fullname').value.trim();
-        const selectedSubjects = Array.from(document.querySelectorAll('#admin-student-subjects input[type="checkbox"]:checked')).map(c => c.value);
+        const subjects = Array.from(document.querySelectorAll('.stu-sub-cb:checked')).map(cb => cb.value);
 
-        if (!no || !name) return showToast('กรุณากรอกเลขที่และชื่อ-นามสกุล', 'error');
-        if (selectedSubjects.length === 0) return showToast('กรุณาเลือกวิชาที่เรียนอย่างน้อย 1 วิชา', 'error');
+        if (!no || no < 1) return showToast('กรุณากรอกเลขที่ให้ถูกต้อง', 'error');
+        if (!name) return showToast('กรุณากรอกชื่อ - นามสกุลนักเรียน', 'error');
+        if (subjects.length === 0) return showToast('กรุณาเลือกวิชาที่เรียนอย่างน้อย 1 วิชา', 'error');
 
         state.students.push({
-          id: 'stu_' + Date.now(),
+          id: 'stu_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
           no,
           name,
           gender: detectGender(name),
-          className,
-          subjects: selectedSubjects
+          class: cls,
+          subjects
         });
-        localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-        const filterEl = document.getElementById('admin-filter-class');
-        if (filterEl) filterEl.value = className;
 
-        try { await setDoc(doc(db, 'years', `${state.currentYear}_students`), { list: state.students }); } catch (e) {}
-        persistSessionAndReload(`เพิ่ม "${name}" เรียบร้อยแล้ว`);
+        await saveStudentsToCloud();
+        persistSessionAndReload(`เพิ่มนักเรียน ${name} สำเร็จ`);
       });
 
-      // Edit Student Modal Save
+      document.getElementById('admin-filter-class')?.addEventListener('change', renderAdminStudentsTab);
+
+      document.getElementById('btn-admin-batch-delete')?.addEventListener('click', async () => {
+        const ids = new Set(Array.from(document.querySelectorAll('.stu-del-cb:checked')).map(cb => cb.value));
+        if (ids.size === 0) return showToast('กรุณาติ๊กเลือกรายชื่อที่ต้องการลบ', 'error');
+        state.students = state.students.filter(s => !ids.has(s.id));
+        await saveStudentsToCloud();
+        persistSessionAndReload(`ลบรายชื่อที่เลือก ${ids.size} รายการแล้ว`);
+      });
+
+      // Edit Student Modal
       document.getElementById('edit-stu-class')?.addEventListener('change', (e) => {
-        renderSubjectCheckboxes('edit-stu-subjects', e.target.value, null);
+        renderEditStudentSubjects(e.target.value, getSubjectsForClass(e.target.value));
       });
       document.getElementById('btn-cancel-edit-stu')?.addEventListener('click', () => {
         document.getElementById('modal-edit-student').classList.add('hidden');
@@ -2585,266 +2897,257 @@
       document.getElementById('btn-save-edit-stu')?.addEventListener('click', async () => {
         const idx = state.students.findIndex(s => s.id === state.editingStudentId);
         if (idx === -1) return;
+        const cls = document.getElementById('edit-stu-class').value;
+        const no = parseInt(document.getElementById('edit-stu-no').value, 10) || 1;
         const name = document.getElementById('edit-stu-name').value.trim();
-        const no = parseInt(document.getElementById('edit-stu-no').value, 10);
-        const className = document.getElementById('edit-stu-class').value;
-        const selectedSubjects = Array.from(document.querySelectorAll('#edit-stu-subjects input[type="checkbox"]:checked')).map(c => c.value);
-        if (!name || !no) return showToast('ข้อมูลไม่ครบถ้วน', 'error');
-        if (selectedSubjects.length === 0) return showToast('กรุณาเลือกวิชาที่เรียนอย่างน้อย 1 วิชา', 'error');
-        state.students[idx] = { ...state.students[idx], name, no, className, gender: detectGender(name), subjects: selectedSubjects };
-        localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-        try { await setDoc(doc(db, 'years', `${state.currentYear}_students`), { list: state.students }); } catch (e) {}
+        const subjects = Array.from(document.querySelectorAll('.edit-stu-sub-cb:checked')).map(cb => cb.value);
+        if (!name) return showToast('กรุณากรอกชื่อนักเรียน', 'error');
+        state.students[idx] = {
+          ...state.students[idx],
+          class: cls,
+          no,
+          name,
+          gender: detectGender(name),
+          subjects: subjects.length > 0 ? subjects : getSubjectsForClass(cls)
+        };
+        await saveStudentsToCloud();
+        document.getElementById('modal-edit-student').classList.add('hidden');
         persistSessionAndReload('แก้ไขข้อมูลนักเรียนเรียบร้อยแล้ว');
       });
 
-      // ==================== BULK ADD STUDENTS WITH PREVIEW ====================
+      // Bulk Add Students Modal & Preview Verification
+      const renderBulkSubjects = () => {
+        const cls = document.getElementById('bulk-student-class').value || state.classes[0];
+        const subjects = getSubjectsForClass(cls);
+        document.getElementById('bulk-student-subjects').innerHTML = subjects.map(s => `
+          <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 cursor-pointer">
+            <input type="checkbox" value="${s}" checked class="bulk-sub-cb rounded text-indigo-500" />
+            <span>${s}</span>
+          </label>
+        `).join('');
+      };
+
       document.getElementById('btn-open-bulk-modal')?.addEventListener('click', () => {
-        const defaultCls = document.getElementById('admin-student-class').value || state.classes[0];
-        const bulkClsSel = document.getElementById('bulk-student-class');
-        bulkClsSel.value = defaultCls;
-        renderSubjectCheckboxes('bulk-student-subjects', defaultCls, null);
+        document.getElementById('bulk-student-class').value = document.getElementById('admin-student-class').value || state.classes[0];
+        renderBulkSubjects();
         document.getElementById('modal-bulk-add').classList.remove('hidden');
       });
-
-      document.getElementById('bulk-student-class')?.addEventListener('change', (e) => {
-        renderSubjectCheckboxes('bulk-student-subjects', e.target.value, null);
-      });
-
+      document.getElementById('bulk-student-class')?.addEventListener('change', renderBulkSubjects);
       document.getElementById('btn-toggle-all-bulk-subjects')?.addEventListener('click', () => {
-        const boxes = document.querySelectorAll('#bulk-student-subjects input[type="checkbox"]');
-        const allChecked = Array.from(boxes).every(b => b.checked);
-        boxes.forEach(b => { b.checked = !allChecked; });
+        const cbs = document.querySelectorAll('.bulk-sub-cb');
+        const allChecked = Array.from(cbs).every(cb => cb.checked);
+        cbs.forEach(cb => cb.checked = !allChecked);
       });
+      document.getElementById('btn-close-bulk-add')?.addEventListener('click', () => document.getElementById('modal-bulk-add').classList.add('hidden'));
+      document.getElementById('btn-cancel-bulk-add')?.addEventListener('click', () => document.getElementById('modal-bulk-add').classList.add('hidden'));
 
-      const closeBulkModal = () => document.getElementById('modal-bulk-add').classList.add('hidden');
-      document.getElementById('btn-close-bulk-add')?.addEventListener('click', closeBulkModal);
-      document.getElementById('btn-cancel-bulk-add')?.addEventListener('click', closeBulkModal);
-
-      // Parse & Open Verification Preview Modal
       document.getElementById('btn-bulk-preview')?.addEventListener('click', () => {
         const cls = document.getElementById('bulk-student-class').value;
-        const selectedSubjects = Array.from(document.querySelectorAll('#bulk-student-subjects input[type="checkbox"]:checked')).map(c => c.value);
+        const subjects = Array.from(document.querySelectorAll('.bulk-sub-cb:checked')).map(cb => cb.value);
         const rawText = document.getElementById('bulk-student-textarea').value.trim();
 
-        if (selectedSubjects.length === 0) return showToast('กรุณาเลือกวิชาที่เรียนอย่างน้อย 1 วิชา', 'error');
-        if (!rawText) return showToast('กรุณาพิมพ์รายชื่อนักเรียน (ชื่อ,เลขที่)', 'error');
+        if (subjects.length === 0) return showToast('กรุณาเลือกวิชาอย่างน้อย 1 วิชา', 'error');
+        if (!rawText) return showToast('กรุณาพิมพ์รายชื่อนักเรียน', 'error');
 
         const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        const previewRows = [];
-        state.parsedBulkStudents = [];
-
-        lines.forEach((line, idx) => {
-          const parts = line.split(',').map(p => p.trim());
-          let name = '';
-          let no = NaN;
-          if (parts.length >= 2) {
-            if (!isNaN(parseInt(parts[1], 10))) {
-              name = parts[0];
-              no = parseInt(parts[1], 10);
-            } else if (!isNaN(parseInt(parts[0], 10))) {
-              no = parseInt(parts[0], 10);
-              name = parts[1];
-            }
-          }
-          const isValid = Boolean(name) && !isNaN(no) && no > 0;
-          const gender = detectGender(name);
-          if (isValid) {
-            state.parsedBulkStudents.push({
-              id: `stu_${Date.now()}_${idx}`,
-              no,
-              name,
-              gender,
-              className: cls,
-              subjects: [...selectedSubjects]
-            });
-          }
-          previewRows.push({ raw: line, no, name, gender, cls, isValid });
+        const parsed = lines.map((line, i) => {
+          const parts = line.split(',');
+          const name = (parts[0] || '').trim();
+          const no = parseInt((parts[1] || '').trim(), 10) || (i + 1);
+          const valid = name.length > 0;
+          return {
+            id: 'stu_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5),
+            no,
+            name,
+            gender: detectGender(name),
+            class: cls,
+            subjects,
+            valid
+          };
         });
 
-        document.getElementById('bulk-preview-summary').innerHTML =
-          `ระดับชั้น <strong class="text-white">${cls}</strong> | วิชาที่เลือก: <strong class="text-sky-400">${selectedSubjects.join(', ')}</strong> | ถูกต้อง <strong class="text-emerald-400">${state.parsedBulkStudents.length}</strong> จาก ${previewRows.length} รายการ`;
-
-        const tbody = document.getElementById('bulk-preview-tbody');
-        tbody.innerHTML = previewRows.map(r => {
-          if (!r.isValid) {
-            return `
-              <tr class="bg-rose-500/10">
-                <td class="px-3 py-2 text-center text-rose-400 font-bold">?</td>
-                <td colspan="3" class="px-3 py-2 text-rose-300 font-mono">${r.raw}</td>
-                <td class="px-3 py-2 text-rose-400 font-semibold">❌ รูปแบบไม่ถูกต้อง (ต้องเป็น ชื่อ,เลขที่)</td>
-              </tr>`;
-          }
-          return `
-            <tr>
-              <td class="px-3 py-2 text-center font-bold text-slate-200">${r.no}</td>
-              <td class="px-3 py-2 font-medium text-white">${r.name}</td>
-              <td class="px-3 py-2 text-center">${r.gender === 'M' ? '<span class="text-[#60a5fa]">♂ ชาย</span>' : '<span class="text-[#f472b6]">♀ หญิง</span>'}</td>
-              <td class="px-3 py-2 text-center text-slate-300">${r.cls}</td>
-              <td class="px-3 py-2 text-emerald-400 font-semibold">✅ พร้อมบันทึก</td>
-            </tr>`;
-        }).join('');
+        state.pendingBulkStudents = parsed;
+        document.getElementById('bulk-preview-summary').textContent = `ห้องเรียน ${cls} • จำนวน ${parsed.length} คน • วิชาที่เลือก: ${subjects.join(', ')}`;
+        document.getElementById('bulk-preview-tbody').innerHTML = parsed.map(p => `
+          <tr>
+            <td class="px-3 py-2 text-center font-bold">${p.no}</td>
+            <td class="px-3 py-2 font-medium text-white">${p.name || '-'}</td>
+            <td class="px-3 py-2 text-center">${renderGenderBadge(p.gender)}</td>
+            <td class="px-3 py-2 text-center text-indigo-300 font-bold">${p.class}</td>
+            <td class="px-3 py-2">${p.valid ? '<span class="text-emerald-400 font-semibold">✓ ข้อมูลถูกต้อง</span>' : '<span class="text-rose-400 font-semibold">✗ ไม่พบชื่อ</span>'}</td>
+          </tr>
+        `).join('');
 
         document.getElementById('modal-bulk-add').classList.add('hidden');
         document.getElementById('modal-bulk-preview').classList.remove('hidden');
       });
 
-      // Back to Edit from Preview Modal
       document.getElementById('btn-bulk-back-edit')?.addEventListener('click', () => {
         document.getElementById('modal-bulk-preview').classList.add('hidden');
         document.getElementById('modal-bulk-add').classList.remove('hidden');
       });
 
-      // Confirm & Save Bulk Students
       document.getElementById('btn-bulk-confirm-save')?.addEventListener('click', async () => {
-        if (state.parsedBulkStudents.length === 0) {
-          return showToast('ไม่มีรายการที่ถูกต้องสำหรับบันทึก กรุณากดแก้ไข', 'error');
-        }
-        const targetCls = state.parsedBulkStudents[0].className;
-        state.students.push(...state.parsedBulkStudents);
-        localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-        const filterEl = document.getElementById('admin-filter-class');
-        if (filterEl) filterEl.value = targetCls;
-
-        try { await setDoc(doc(db, 'years', `${state.currentYear}_students`), { list: state.students }); } catch (e) {}
-        persistSessionAndReload(`เพิ่มนักเรียน ${state.parsedBulkStudents.length} คน เรียบร้อยแล้ว`);
+        const validItems = state.pendingBulkStudents.filter(p => p.valid).map(({ valid, ...rest }) => rest);
+        if (validItems.length === 0) return showToast('ไม่พบรายการที่ถูกต้องสำหรับบันทึก', 'error');
+        state.students.push(...validItems);
+        await saveStudentsToCloud();
+        document.getElementById('modal-bulk-preview').classList.add('hidden');
+        persistSessionAndReload(`เพิ่มนักเรียนจำนวน ${validItems.length} คนเรียบร้อยแล้ว`);
       });
 
-      // Select All & Batch Delete Students
-      document.getElementById('admin-filter-class')?.addEventListener('change', renderAdminView);
-      document.getElementById('btn-admin-batch-delete')?.addEventListener('click', async () => {
-        const ids = Array.from(new Set(Array.from(document.querySelectorAll('.chk-admin-stu:checked')).map(c => c.value)));
-        if (ids.length === 0) return showToast('กรุณาติ๊กเลือกรายชื่อที่ต้องการลบ', 'error');
-        state.students = state.students.filter(s => !ids.includes(s.id));
-        localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-        try { await setDoc(doc(db, 'years', `${state.currentYear}_students`), { list: state.students }); } catch (e) {}
-        persistSessionAndReload(`ลบรายชื่อที่เลือก ${ids.length} รายการเรียบร้อยแล้ว`);
-      });
-
-      // CSV Import (Format: เลขที่,ชื่อ-นามสกุล,ห้องเรียน)
+      // CSV Import
       document.getElementById('admin-file-csv')?.addEventListener('change', (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = async (ev) => {
-          const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
+          const text = ev.target.result;
+          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          const defaultCls = document.getElementById('admin-student-class').value || state.classes[0];
+          const defaultSubs = Array.from(document.querySelectorAll('.stu-sub-cb:checked')).map(cb => cb.value);
           let added = 0;
+
           lines.forEach((line, idx) => {
             const cols = line.split(',').map(c => c.trim());
-            if (cols.length >= 2 && !isNaN(parseInt(cols[0], 10))) {
-              const no = parseInt(cols[0], 10);
-              const name = cols[1];
-              const cls = cols[2] && state.classes.includes(cols[2]) ? cols[2] : document.getElementById('admin-student-class').value;
+            if (idx === 0 && (cols[0].includes('เลขที่') || cols[0].toLowerCase() === 'no')) return;
+            let no = parseInt(cols[0], 10);
+            let name = cols[1] || '';
+            let cls = cols[2] || defaultCls;
+            if (isNaN(no)) {
+              name = cols[0];
+              no = parseInt(cols[1], 10) || (added + 1);
+              cls = cols[2] || defaultCls;
+            }
+            if (name) {
               state.students.push({
-                id: `stu_${Date.now()}_${idx}`,
+                id: 'stu_' + Date.now() + '_' + idx,
                 no,
                 name,
                 gender: detectGender(name),
-                className: cls,
-                subjects: getSubjectsForClass(cls)
+                class: cls,
+                subjects: defaultSubs.length > 0 ? defaultSubs : getSubjectsForClass(cls)
               });
               added++;
             }
           });
-          localStorage.setItem(`kroek_${state.currentYear}_students`, JSON.stringify(state.students));
-          try { await setDoc(doc(db, 'years', `${state.currentYear}_students`), { list: state.students }); } catch (e) {}
-          persistSessionAndReload(`นำเข้าจาก CSV สำเร็จ ${added} คน`);
+
+          if (added > 0) {
+            await saveStudentsToCloud();
+            persistSessionAndReload(`นำเข้า CSV สำเร็จ ${added} คน`);
+          } else {
+            showToast('ไม่พบข้อมูลนักเรียนในไฟล์ CSV', 'error');
+          }
         };
         reader.readAsText(file, 'UTF-8');
       });
 
-      // Execute Auto-Promotion
+      // Auto Promote Execution
       document.getElementById('btn-execute-promote')?.addEventListener('click', async () => {
         const targetYear = document.getElementById('promote-target-year').value;
-        if (targetYear === state.currentYear) return showToast('กรุณาเลือกปีการศึกษาปลายทางที่ต่างจากปีปัจจุบัน', 'error');
-
+        if (targetYear === state.currentYear) {
+          return showToast('กรุณาเลือกปีการศึกษาใหม่ที่ต่างจากปีปัจจุบัน', 'error');
+        }
+        const rows = document.querySelectorAll('#promote-tbody tr');
         const promotedList = [];
-        document.querySelectorAll('#promote-tbody tr[data-stu-id]').forEach(row => {
-          const chk = row.querySelector('.chk-promote');
-          if (!chk?.checked) return;
-          const stu = state.students.find(s => s.id === row.dataset.stuId);
-          const action = row.querySelector('.sel-promote-action').value;
-          const newClass = action === 'promote' ? getNextClass(stu.className) : stu.className;
-          if (newClass !== 'จบการศึกษา') {
-            promotedList.push({ ...stu, className: newClass, subjects: getSubjectsForClass(newClass) });
-          }
+        rows.forEach(tr => {
+          const cb = tr.querySelector('.promote-cb');
+          const sel = tr.querySelector('.promote-action-sel');
+          if (!cb || !cb.checked || !sel) return;
+          const stu = state.students.find(s => s.id === cb.dataset.stuId);
+          if (!stu) return;
+          if (sel.value === 'graduate') return;
+          const newClass = sel.value === 'promote' ? getNextClass(stu.class) : stu.class;
+          if (newClass === 'จบการศึกษา') return;
+          promotedList.push({
+            ...stu,
+            id: 'stu_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            class: newClass,
+            subjects: getSubjectsForClass(newClass)
+          });
         });
 
-        localStorage.setItem(`kroek_${targetYear}_students`, JSON.stringify(promotedList));
-        try { await setDoc(doc(db, 'years', `${targetYear}_students`), { list: promotedList }); } catch (e) {}
-        persistSessionAndReload(`เลื่อนชั้นนักเรียน ${promotedList.length} คน ไปปี ${targetYear} สำเร็จ`);
+        if (promotedList.length === 0) return showToast('ไม่มีรายการนักเรียนสำหรับเลื่อนชั้น', 'error');
+        const existingTarget = safeGetJSON(localStorage, `kroek_${targetYear}_students`, []);
+        await saveStudentsToCloud(targetYear, [...existingTarget, ...promotedList]);
+        showToast(`เลื่อนชั้นนักเรียน ${promotedList.length} คน ไปยังปีการศึกษา ${targetYear} สำเร็จ`);
       });
 
-      // Purge Old Year 2-Step Confirmation
+      // Purge Old Year Execution
       document.getElementById('purge-confirm-input')?.addEventListener('input', (e) => {
-        const target = document.getElementById('purge-old-year-select').value;
-        document.getElementById('btn-execute-purge').disabled = !(target && e.target.value.trim() === target);
+        const targetYear = document.getElementById('purge-old-year-select').value;
+        document.getElementById('btn-execute-purge').disabled = !(targetYear && e.target.value.trim() === targetYear);
       });
+
       document.getElementById('btn-execute-purge')?.addEventListener('click', async () => {
-        const target = document.getElementById('purge-old-year-select').value;
-        localStorage.removeItem(`kroek_${target}_students`);
-        localStorage.removeItem(`kroek_${target}_attendance`);
-        localStorage.removeItem(`kroek_${target}_savings`);
+        const targetYear = document.getElementById('purge-old-year-select').value;
+        if (!targetYear) return;
         try {
-          await deleteDoc(doc(db, 'years', `${target}_students`));
-          await deleteDoc(doc(db, 'years', `${target}_attendance`));
-          await deleteDoc(doc(db, 'years', `${target}_savings`));
+          localStorage.removeItem(`kroek_${targetYear}_students`);
+          localStorage.removeItem(`kroek_${targetYear}_attendance`);
+          localStorage.removeItem(`kroek_${targetYear}_savings`);
         } catch (e) {}
-        persistSessionAndReload(`ล้างข้อมูลปีการศึกษา ${target} เรียบร้อยแล้ว`);
+        try {
+          await deleteDoc(doc(db, 'years', `${targetYear}_students`));
+          await deleteDoc(doc(db, 'years', `${targetYear}_attendance`));
+          await deleteDoc(doc(db, 'years', `${targetYear}_savings`));
+        } catch (e) {
+          handleFirestoreError(e);
+        }
+        persistSessionAndReload(`ล้างข้อมูลปีการศึกษา ${targetYear} เรียบร้อยแล้ว`);
       });
 
-      // PDF Export Buttons
-      document.getElementById('btn-pdf-subject')?.addEventListener('click', () => {
-        const cls = document.getElementById('sub-summary-class').value;
-        const sub = document.getElementById('sub-summary-subject').value;
-        const mVal = document.getElementById('sub-summary-month').value;
-        const periodLabel = mVal === 'ALL' ? 'ทั้งปีการศึกษา' : `เดือน${THAI_MONTHS[mVal]}`;
-        const tableHtml = document.querySelector('#view-subject-summary table').outerHTML
-          .replace(/class="[^"]*"/g, 'style="width:100%; border-collapse:collapse; border:1px solid #cbd5e1;"')
-          .replace(/<th/g, '<th style="border:1px solid #94a3b8; padding:8px; background:#f1f5f9; text-align:center;"')
-          .replace(/<td/g, '<td style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;"');
-        exportThaiPDF(`รายงานสรุปผลการมาเรียนรายวิชา`, `ชั้น ${cls} • วิชา ${sub} • ช่วงเวลา: ${periodLabel} • ปีการศึกษา ${state.currentYear}`, tableHtml);
-      });
-
-      document.getElementById('btn-pdf-individual')?.addEventListener('click', () => {
-        const cls = document.getElementById('ind-summary-class').value;
-        const sub = document.getElementById('ind-summary-subject').value;
-        const mVal = document.getElementById('ind-summary-month').value;
-        const tableHtml = document.getElementById('ind-matrix-table').outerHTML
-          .replace(/class="[^"]*"/g, 'style="width:100%; border-collapse:collapse; border:1px solid #cbd5e1; font-size:11px;"')
-          .replace(/<th/g, '<th style="border:1px solid #94a3b8; padding:6px; background:#f1f5f9; text-align:center;"')
-          .replace(/<td/g, '<td style="border:1px solid #cbd5e1; padding:5px; text-align:center;"');
-        exportThaiPDF(`รายงานสรุปผลการมาเรียนรายบุคคล`, `ชั้น ${cls} • วิชา ${sub} • เดือน${THAI_MONTHS[mVal]} • ปีการศึกษา ${state.currentYear}`, tableHtml);
-      });
-
-      document.getElementById('btn-pdf-savings')?.addEventListener('click', () => {
-        const cls = document.getElementById('savings-monthly-class').value;
-        const mVal = document.getElementById('savings-monthly-month').value;
-        const tableHtml = document.getElementById('savings-matrix-table').outerHTML
-          .replace(/class="[^"]*"/g, 'style="width:100%; border-collapse:collapse; border:1px solid #cbd5e1; font-size:11px;"')
-          .replace(/<th/g, '<th style="border:1px solid #94a3b8; padding:6px; background:#f1f5f9; text-align:center;"')
-          .replace(/<td/g, '<td style="border:1px solid #cbd5e1; padding:5px; text-align:center;"');
-        exportThaiPDF(`รายงานสรุปยอดเงินออมทรัพย์ประจำเดือน`, `ชั้น ${cls} • เดือน${THAI_MONTHS[mVal]} • ปีการศึกษา ${state.currentYear}`, tableHtml);
-      });
+      // 5-Minute Admin Session Countdown Timer
+      setInterval(() => {
+        if (!state.adminUnlocked) return;
+        const expiry = getAdminExpiry();
+        const remaining = expiry - Date.now();
+        if (remaining <= 0) {
+          state.adminUnlocked = false;
+          clearAdminExpiry();
+          document.getElementById('admin-lock-icon')?.classList.replace('fa-lock-open', 'fa-lock');
+          if (state.currentMenu === 'admin') {
+            switchMenu('dashboard');
+          }
+          showToast('หมดเวลาเซสชัน Admin (5 นาที) ระบบล็อกอัตโนมัติแล้ว', 'error');
+        } else {
+          const mins = String(Math.floor(remaining / 60000)).padStart(2, '0');
+          const secs = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
+          const timerEl = document.getElementById('admin-session-timer');
+          if (timerEl) timerEl.textContent = `เหลือเวลา ${mins}:${secs}`;
+        }
+      }, 1000);
     }
 
     // ==================== INITIALIZE APP ====================
-    window.addEventListener('DOMContentLoaded', () => {
-      populateYearSelects();
-      populateClassSelects();
-      populateSubjectSelects();
-      document.getElementById('check-input-date').value = state.filters['check-input-date'] || getTodayISO();
-      document.getElementById('savings-daily-date').value = state.filters['savings-daily-date'] || getTodayISO();
+    function bootApp() {
+      populateYearDropdowns();
+      populateAllClassDropdowns();
+      populateAllSubjectDropdowns();
 
-      ['sub-summary-month', 'ind-summary-month', 'savings-monthly-month', 'savings-monthly-mode'].forEach(id => {
+      // Restore saved filter values after auto-reload
+      Object.entries(state.filters).forEach(([id, val]) => {
         const el = document.getElementById(id);
-        if (el && state.filters[id]) el.value = state.filters[id];
+        if (el && val) el.value = val;
       });
 
-      loadLocalData();
-      setupEvents();
-      renderCurrentMenu();
-      startFirebaseSync();
-    });
+      // Default dates to today if empty
+      const checkDateEl = document.getElementById('check-input-date');
+      if (checkDateEl && !checkDateEl.value) checkDateEl.value = getTodayISO();
+      const savDateEl = document.getElementById('savings-daily-date');
+      if (savDateEl && !savDateEl.value) savDateEl.value = getTodayISO();
+
+      // Sync lock icon state
+      if (state.adminUnlocked) {
+        document.getElementById('admin-lock-icon')?.classList.replace('fa-lock', 'fa-lock-open');
+      }
+
+      initEventListeners();
+      subscribeToYearData(state.currentYear);
+      switchMenu(state.currentMenu);
+    }
+
+    bootApp();
   </script>
 </body>
 </html>
